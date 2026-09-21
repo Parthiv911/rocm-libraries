@@ -21,11 +21,18 @@ from rocke.helpers.compile import compile_kernel
 from rocke.runtime import KernelLauncher, LaunchConfig
 
 
-B = 1
-S = 4096
-HQ = 32
-HKV = 8
-D = 128
+# Shape is controlled by environment variables.
+B = int(os.environ.get("B", "1"))
+S = int(os.environ.get("S", "4096"))
+HQ = int(os.environ.get("HQ", "32"))
+HKV = int(os.environ.get("HKV", "8"))
+D = int(os.environ.get("D", "128"))
+
+WARMUP = int(os.environ.get("WARMUP", "10"))
+ITERS = int(os.environ.get("ITERS", "50"))
+
+VALIDATE = os.environ.get("VALIDATE", "0") == "1"
+MAX_ABS_TOL = 2e-2
 
 
 args = argparse.Namespace(
@@ -55,6 +62,7 @@ req = dense_request(
 spec = resolve_dense_spec(req, {})
 
 
+print(f"shape: B={B} S={S} HQ={HQ} HKV={HKV} D={D}")
 print("kernel:", spec.kernel_name())
 print("cfvst:", spec.resolved_use_cfvst())
 print("v_swizzle:", spec.resolved_use_v_swizzle())
@@ -63,17 +71,17 @@ print("wpe:", spec.resolved_waves_per_eu())
 
 
 # ------------------------------------------------------------
-# Numerical validation mode.
+# Numerical validation
 #
-# Run with:
+# Example:
 #
-#     VALIDATE=1 python bench_rocke_once.py
+# B=1 S=4096 HQ=32 HKV=8 D=128 \
+# VALIDATE=1 python bench_rocke_once.py
 #
-# This uses ROCKE's built-in reference check and exits before
-# entering the performance benchmark.
+# Validation is kept completely separate from performance timing.
 # ------------------------------------------------------------
 
-if os.environ.get("VALIDATE", "0") == "1":
+if VALIDATE:
     _, _, err = run(
         spec,
         warmup=0,
@@ -82,7 +90,7 @@ if os.environ.get("VALIDATE", "0") == "1":
         overrides={},
     )
 
-    if err >= 2e-2:
+    if err >= MAX_ABS_TOL:
         raise SystemExit(
             f"VALIDATION=FAIL max_abs_error={err:.6e}"
         )
@@ -166,26 +174,32 @@ cfg = LaunchConfig(
 )
 
 
+# ------------------------------------------------------------
 # Warmup
-for _ in range(10):
+# ------------------------------------------------------------
+
+for _ in range(WARMUP):
     launcher(vals, config=cfg)
 
 torch.cuda.synchronize()
 
 
-# Timed benchmark
+# ------------------------------------------------------------
+# Timed launches
+# ------------------------------------------------------------
+
 start = torch.cuda.Event(enable_timing=True)
 end = torch.cuda.Event(enable_timing=True)
 
 start.record()
 
-for _ in range(50):
+for _ in range(ITERS):
     launcher(vals, config=cfg)
 
 end.record()
 end.synchronize()
 
 
-ms = start.elapsed_time(end) / 50
+ms = start.elapsed_time(end) / ITERS
 
 print(f"RESULT_MS={ms:.6f}")

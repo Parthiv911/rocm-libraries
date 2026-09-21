@@ -1,0 +1,8 @@
+shape: B=16 S=4096 HQ=32 HKV=8 D=128
+kernel: rocke_attention_dense_d128_hq32_kv8_bn64_bf16_sq4096_sk4096_causal_lazyrs_persist304_hkvmaj_gfx942_b16_wpe2
+cfvst: True
+v_swizzle: True
+v_row_pad: 0
+wpe: 2
+[rocke_attention_dense_d128_hq32_kv8_bn64_bf16_sq4096_sk4096_causal_lazyrs_persist304_hkvmaj_gfx942_b16_wpe2] 7.2593 ms  303.0 TFLOPS  max_abs=2.43e-03  PASS
+VALIDATION=PASS max_abs_error=2.429485e-03

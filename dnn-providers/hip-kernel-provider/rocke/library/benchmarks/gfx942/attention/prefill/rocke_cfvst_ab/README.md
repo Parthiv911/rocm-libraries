@@ -86,24 +86,23 @@ for 10 rounds.
 
 ## Results
 
-| Round | Variant          | CFVST | Latency (ms) |
-|------:|------------------|:-----:|-------------:|
-| 1 | A_without_cfvst | False | 0.640708 |
-| 1 | B_with_cfvst    | True  | 0.583333 |
-| 2 | A_without_cfvst | False | 0.642399 |
-| 2 | B_with_cfvst    | True  | 0.580008 |
-| 3 | A_without_cfvst | False | 0.645111 |
-| 3 | B_with_cfvst    | True  | 0.575292 |
-| 4 | A_without_cfvst | False | 0.644582 |
-| 4 | B_with_cfvst    | True  | 0.582563 |
-| 5 | A_without_cfvst | False | 0.645442 |
-| 5 | B_with_cfvst    | True  | 0.580152 |
+## CFVST A/B Results
+
+| B | S | Hq | Hkv | D | Without CFVST (ms) | With CFVST (ms) | Latency Reduction | Speedup |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 4096 | 32 | 8 | 128 | 0.644985 | 0.576996 | 10.54% | 1.1178× |
+| 1 | 4096 | 32 | 16 | 128 | 0.648211 | 0.581986 | 10.22% | 1.1138× |
+| 1 | 8192 | 32 | 8 | 128 | 2.003344 | 1.779331 | 11.18% | 1.1259× |
+| 1 | 8192 | 32 | 16 | 128 | 1.995665 | 1.779168 | 10.85% | 1.1217× |
+| 1 | 16384 | 32 | 8 | 128 | 7.523781 | 6.829420 | 9.23% | 1.1017× |
+| 16 | 4096 | 32 | 8 | 128 | 7.167513 | 6.408760 | 10.59% | 1.1184× |
+| 16 | 4096 | 32 | 16 | 128 | 7.586794 | 6.946449 | 8.44% | 1.0922× |
+| 16 | 8192 | 32 | 8 | 128 | 27.904070 | 24.506838 | 12.17% | 1.1386× |
 
 ```text
-Without CFVST: 0.644582 ms
-With CFVST: 0.580152 ms
+Across all 8 tested BF16 D128 configurations, enabling CFVST reduced median kernel latency by **8.44%–12.17%**.
 
-10% improvement or 1.11x speed up
+All tested configurations improved with CFVST enabled.
 ```
 ## What the A/B Script Changes
 
