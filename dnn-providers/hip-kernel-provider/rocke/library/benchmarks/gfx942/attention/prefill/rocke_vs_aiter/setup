@@ -141,10 +141,10 @@ mkdir -p "$CK/build"
 bash -lc "source '$ENV/ck_env.sh'; cd '$CK/build'; \
 ../script/cmake-ck-dev.sh --minimal .. gfx942 -G Ninja \
 -DBUILD_CK_EXAMPLES=ON -DBUILD_TESTING=OFF -DFMHA_FWD_ENABLE_APIS=fwd; \
-ninja -j$(nproc) tile_example_fmha_fwd
+ninja -j$(nproc) tile_example_fmha_fwd"
 
 mv -f "$CMAKE.bak" "$CMAKE"
 trap - EXIT
 
 echo "Setup complete."
-echo "Run: ./run_mi300x_attention_bench.sh"
+echo "Run: ./run_benchmark.sh"

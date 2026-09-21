@@ -115,6 +115,25 @@ run_one() {
     echo "$round,$variant,$state,$ms" >> "$CSV"
 }
 
+echo
+echo "================================================"
+echo "NUMERICAL VALIDATION"
+echo "================================================"
+
+echo
+echo "Validating A_without_cfvst..."
+set_off
+VALIDATE=1 python "$PY"
+
+echo
+echo "Validating B_with_cfvst..."
+set_on
+VALIDATE=1 python "$PY"
+
+echo
+echo "Both variants passed numerical validation."
+echo
+
 for ((i=1; i<=ROUNDS; i++)); do
     set_off
     run_one "$i" "A_without_cfvst" "False"

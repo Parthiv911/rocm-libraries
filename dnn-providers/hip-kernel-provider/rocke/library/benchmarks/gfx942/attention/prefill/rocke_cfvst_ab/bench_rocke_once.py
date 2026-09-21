@@ -1,17 +1,22 @@
 import argparse
 import math
+import os
+
 import torch
 
 from builders.gfx942.attention.prefill.attention_dense_prefill import (
     dense_request,
     resolve_dense_spec,
+    run,
 )
+
 from kernels.gfx942.attention_dense import (
     build_attention_dense,
     attention_dense_signature,
     attention_dense_grid,
     attention_dense_block,
 )
+
 from rocke.helpers.compile import compile_kernel
 from rocke.runtime import KernelLauncher, LaunchConfig
 
@@ -21,6 +26,7 @@ S = 4096
 HQ = 32
 HKV = 8
 D = 128
+
 
 args = argparse.Namespace(
     persistent=None,
@@ -32,6 +38,7 @@ args = argparse.Namespace(
     lds_k_group_pad=None,
     sliding_window=None,
 )
+
 
 req = dense_request(
     args,
@@ -47,11 +54,46 @@ req = dense_request(
 
 spec = resolve_dense_spec(req, {})
 
+
 print("kernel:", spec.kernel_name())
 print("cfvst:", spec.resolved_use_cfvst())
 print("v_swizzle:", spec.resolved_use_v_swizzle())
 print("v_row_pad:", spec.resolved_v_row_pad())
 print("wpe:", spec.resolved_waves_per_eu())
+
+
+# ------------------------------------------------------------
+# Numerical validation mode.
+#
+# Run with:
+#
+#     VALIDATE=1 python bench_rocke_once.py
+#
+# This uses ROCKE's built-in reference check and exits before
+# entering the performance benchmark.
+# ------------------------------------------------------------
+
+if os.environ.get("VALIDATE", "0") == "1":
+    _, _, err = run(
+        spec,
+        warmup=0,
+        iters=1,
+        check=True,
+        overrides={},
+    )
+
+    if err >= 2e-2:
+        raise SystemExit(
+            f"VALIDATION=FAIL max_abs_error={err:.6e}"
+        )
+
+    print(f"VALIDATION=PASS max_abs_error={err:.6e}")
+    raise SystemExit(0)
+
+
+# ------------------------------------------------------------
+# Performance benchmark
+# ------------------------------------------------------------
 
 art = compile_kernel(
     build_attention_dense(spec, arch="gfx942"),
@@ -66,21 +108,47 @@ launcher = KernelLauncher(
     signature=attention_dense_signature(spec),
 )
 
+
 torch.manual_seed(0)
 
 q = (
-    torch.randn(B, S, HQ, D, device="cuda", dtype=torch.bfloat16) * 0.2
+    torch.randn(
+        B,
+        S,
+        HQ,
+        D,
+        device="cuda",
+        dtype=torch.bfloat16,
+    )
+    * 0.2
 ).contiguous()
 
 k = (
-    torch.randn(B, S, HKV, D, device="cuda", dtype=torch.bfloat16) * 0.2
+    torch.randn(
+        B,
+        S,
+        HKV,
+        D,
+        device="cuda",
+        dtype=torch.bfloat16,
+    )
+    * 0.2
 ).contiguous()
 
 v = (
-    torch.randn(B, S, HKV, D, device="cuda", dtype=torch.bfloat16) * 0.2
+    torch.randn(
+        B,
+        S,
+        HKV,
+        D,
+        device="cuda",
+        dtype=torch.bfloat16,
+    )
+    * 0.2
 ).contiguous()
 
 o = torch.empty_like(q)
+
 
 vals = {
     "q_ptr": q,
@@ -90,17 +158,22 @@ vals = {
     "scale": 1.0 / math.sqrt(D),
 }
 
+
 cfg = LaunchConfig(
     grid=attention_dense_grid(spec),
     block=attention_dense_block(spec),
     stream=torch.cuda.current_stream().cuda_stream,
 )
 
+
+# Warmup
 for _ in range(10):
     launcher(vals, config=cfg)
 
 torch.cuda.synchronize()
 
+
+# Timed benchmark
 start = torch.cuda.Event(enable_timing=True)
 end = torch.cuda.Event(enable_timing=True)
 
@@ -111,6 +184,7 @@ for _ in range(50):
 
 end.record()
 end.synchronize()
+
 
 ms = start.elapsed_time(end) / 50
 
