@@ -1,0 +1,65 @@
+jobs:
+  - pmc: ["MfmaUtil"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["MfmaFlopsBF16"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["OccupancyPercent"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["MeanOccupancyPerActiveCU"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_WAVES"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_WAVE_CYCLES"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_BUSY_CU_CYCLES"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["LdsUtil"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["LdsBankConflict"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["LdsLatency"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_LDS"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_WAIT_INST_LDS"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_LDS_BANK_CONFLICT"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["MemUnitStalled"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["VmemLatency"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_VMEM_RD"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_VMEM_WR"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INST_CYCLES_VMEM_RD"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INST_CYCLES_VMEM_WR"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_MFMA"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_VALU_MFMA_BF16"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_VALU_MFMA_BUSY_CYCLES"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_VALU"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_SALU"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["SQ_INSTS_SMEM"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["TCC_HIT_sum"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["TCC_MISS_sum"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["TCC_EA0_RDREQ_DRAM_sum"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["TCC_EA0_WRREQ_DRAM_sum"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["FetchSize"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["WriteSize"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"
+  - pmc: ["BANDWIDTH_EA"]
+    kernel_include_regex: "fmha_fwd_hd128_bf16_causal_rtz"

@@ -1,0 +1,65 @@
+jobs:
+  - pmc: ["MfmaUtil"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["MfmaFlopsBF16"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["OccupancyPercent"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["MeanOccupancyPerActiveCU"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_WAVES"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_WAVE_CYCLES"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_BUSY_CU_CYCLES"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["LdsUtil"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["LdsBankConflict"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["LdsLatency"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_LDS"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_WAIT_INST_LDS"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_LDS_BANK_CONFLICT"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["MemUnitStalled"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["VmemLatency"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_VMEM_RD"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_VMEM_WR"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INST_CYCLES_VMEM_RD"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INST_CYCLES_VMEM_WR"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_MFMA"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_VALU_MFMA_BF16"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_VALU_MFMA_BUSY_CYCLES"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_VALU"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_SALU"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["SQ_INSTS_SMEM"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["TCC_HIT_sum"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["TCC_MISS_sum"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["TCC_EA0_RDREQ_DRAM_sum"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["TCC_EA0_WRREQ_DRAM_sum"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["FetchSize"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["WriteSize"]
+    kernel_include_regex: "rocke_attention_dense"
+  - pmc: ["BANDWIDTH_EA"]
+    kernel_include_regex: "rocke_attention_dense"

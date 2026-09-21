@@ -1,0 +1,2 @@
+"Correlation_Id","Dispatch_Id","Agent_Id","Queue_Id","Process_Id","Thread_Id","Grid_Size","Kernel_Id","Kernel_Name","Workgroup_Size","LDS_Block_Size","Scratch_Size","VGPR_Count","Accum_VGPR_Count","SGPR_Count","Counter_Name","Counter_Value","Start_Timestamp","End_Timestamp"
+8,8,"Agent 1",2,272487,272487,155648,414,"rocke_attention_dense_d128_hq32_kv8_bn64_bf16_sq4096_sk4096_causal_lazyrs_persist304_gfx942_b1_wpe2",512,34816,0,52,132,112,"LdsLatency",45.879075,9431177489804,9431178106163

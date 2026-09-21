@@ -1,0 +1,2 @@
+"Correlation_Id","Dispatch_Id","Agent_Id","Queue_Id","Process_Id","Thread_Id","Grid_Size","Kernel_Id","Kernel_Name","Workgroup_Size","LDS_Block_Size","Scratch_Size","VGPR_Count","Accum_VGPR_Count","SGPR_Count","Counter_Name","Counter_Value","Start_Timestamp","End_Timestamp"
+14,14,"Agent 1",2,271945,271945,131072,14,"aiter::fmha_fwd_hd128_bf16_causal_rtz",512,65536,0,32,224,112,"BANDWIDTH_EA",448.556951,9408938861349,9408939142703
