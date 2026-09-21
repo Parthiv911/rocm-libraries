@@ -19,20 +19,6 @@ The corresponding source change is also recorded in:
 cfvst.patch
 ```
 
-## Benchmark Shape
-
-```text
-B=1
-S=4096
-Hq=32
-Hkv=8
-D=128
-dtype=BF16
-causal=true
-layout=BSHD
-```
-
-
 ## Directory
 
 The commands below should be run from:
