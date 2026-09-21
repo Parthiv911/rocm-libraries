@@ -177,3 +177,184 @@ find "$OUT" -name '*counter_collection.csv' -type f | sort
 echo
 echo "Pass mapping:"
 cat "$OUT/pass_map.csv"
+
+echo
+echo "============================================================"
+echo "CONSOLIDATING COUNTERS"
+echo "============================================================"
+
+python3 - "$OUT" <<'PY'
+import csv
+import glob
+import os
+import sys
+
+root = sys.argv[1]
+
+# ------------------------------------------------------------
+# pass_N -> counter
+# ------------------------------------------------------------
+
+pass_map = {}
+
+with open(os.path.join(root, "pass_map.csv"), newline="") as f:
+    for row in csv.DictReader(f):
+        pass_map[row["pass"]] = row["counter"]
+
+
+def pass_number(name):
+    return int(name.split("_")[1])
+
+
+def read_variant(variant):
+    result = {}
+    resources = None
+
+    for p in sorted(pass_map, key=pass_number):
+        expected_counter = pass_map[p]
+
+        pattern = os.path.join(
+            root,
+            variant,
+            p,
+            "*",
+            "*_counter_collection.csv",
+        )
+
+        files = glob.glob(pattern)
+
+        if len(files) != 1:
+            raise SystemExit(
+                f"ERROR: expected exactly one counter CSV for "
+                f"{variant}/{p}, found {len(files)}"
+            )
+
+        with open(files[0], newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        matches = [
+            r for r in rows
+            if r["Counter_Name"] == expected_counter
+        ]
+
+        if len(matches) != 1:
+            raise SystemExit(
+                f"ERROR: expected exactly one {expected_counter} row "
+                f"for {variant}/{p}, found {len(matches)}"
+            )
+
+        row = matches[0]
+
+        result[expected_counter] = row["Counter_Value"]
+
+        # Static resource information is repeated in every pass.
+        if resources is None:
+            resources = {
+                "Kernel_Name": row["Kernel_Name"],
+                "Grid_Size": row["Grid_Size"],
+                "Workgroup_Size": row["Workgroup_Size"],
+                "LDS_Block_Size": row["LDS_Block_Size"],
+                "Scratch_Size": row["Scratch_Size"],
+                "VGPR_Count": row["VGPR_Count"],
+                "Accum_VGPR_Count": row["Accum_VGPR_Count"],
+                "SGPR_Count": row["SGPR_Count"],
+            }
+
+    return result, resources
+
+
+aiter, aiter_resources = read_variant("aiter")
+rocke, rocke_resources = read_variant("rocke")
+
+
+# ------------------------------------------------------------
+# Combined counter table
+# ------------------------------------------------------------
+
+comparison_path = os.path.join(root, "counter_comparison.csv")
+
+with open(comparison_path, "w", newline="") as f:
+    w = csv.writer(f)
+
+    w.writerow([
+        "Counter",
+        "AITER",
+        "ROCKE",
+    ])
+
+    for p in sorted(pass_map, key=pass_number):
+        counter = pass_map[p]
+
+        w.writerow([
+            counter,
+            aiter[counter],
+            rocke[counter],
+        ])
+
+
+# ------------------------------------------------------------
+# Kernel resource table
+# ------------------------------------------------------------
+
+resources_path = os.path.join(root, "kernel_resources.csv")
+
+fields = [
+    "Kernel_Name",
+    "Grid_Size",
+    "Workgroup_Size",
+    "LDS_Block_Size",
+    "Scratch_Size",
+    "VGPR_Count",
+    "Accum_VGPR_Count",
+    "SGPR_Count",
+]
+
+with open(resources_path, "w", newline="") as f:
+    w = csv.writer(f)
+
+    w.writerow(["Metric", "AITER", "ROCKE"])
+
+    for field in fields:
+        w.writerow([
+            field,
+            aiter_resources[field],
+            rocke_resources[field],
+        ])
+
+
+# ------------------------------------------------------------
+# Pretty stdout table
+# ------------------------------------------------------------
+
+print()
+print(f"{'Counter':<32} {'AITER':>18} {'ROCKE':>18}")
+print("-" * 72)
+
+for p in sorted(pass_map, key=pass_number):
+    counter = pass_map[p]
+
+    print(
+        f"{counter:<32} "
+        f"{aiter[counter]:>18} "
+        f"{rocke[counter]:>18}"
+    )
+
+print()
+print("Kernel resources:")
+print()
+
+print(f"{'Metric':<24} {'AITER':>18} {'ROCKE':>18}")
+print("-" * 64)
+
+for field in fields[1:]:
+    print(
+        f"{field:<24} "
+        f"{aiter_resources[field]:>18} "
+        f"{rocke_resources[field]:>18}"
+    )
+
+print()
+print("Wrote:")
+print(f"  {comparison_path}")
+print(f"  {resources_path}")
+PY
