@@ -127,6 +127,14 @@ The resulting workspace is approximately:
                                         └── results/
 ```
 
+Run the profiling script:
+
+```bash
+chmod +x setup profile.sh
+
+./profile.sh
+```
+
 ## Benchmark Methodology
 
 All three implementations use the same attention configurations.
