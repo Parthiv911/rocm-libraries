@@ -1,0 +1,11 @@
+round,variant,cfvst,ms
+1,A_without_cfvst,False,0.640708
+1,B_with_cfvst,True,0.583333
+2,A_without_cfvst,False,0.642399
+2,B_with_cfvst,True,0.580008
+3,A_without_cfvst,False,0.645111
+3,B_with_cfvst,True,0.575292
+4,A_without_cfvst,False,0.644582
+4,B_with_cfvst,True,0.582563
+5,A_without_cfvst,False,0.645442
+5,B_with_cfvst,True,0.580152

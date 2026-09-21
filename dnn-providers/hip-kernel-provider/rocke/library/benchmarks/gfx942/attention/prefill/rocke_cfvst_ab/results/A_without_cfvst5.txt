@@ -1,0 +1,6 @@
+kernel: rocke_attention_dense_d128_hq32_kv8_bn64_bf16_sq4096_sk4096_causal_lazyrs_persist304_gfx942_b1_wpe2
+cfvst: False
+v_swizzle: False
+v_row_pad: 8
+wpe: 2
+RESULT_MS=0.644705
