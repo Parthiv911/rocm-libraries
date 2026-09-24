@@ -91,9 +91,7 @@ if VALIDATE:
     )
 
     if err >= MAX_ABS_TOL:
-        raise SystemExit(
-            f"VALIDATION=FAIL max_abs_error={err:.6e}"
-        )
+        raise SystemExit(f"VALIDATION=FAIL max_abs_error={err:.6e}")
 
     print(f"VALIDATION=PASS max_abs_error={err:.6e}")
     raise SystemExit(0)
