@@ -149,6 +149,7 @@ def test_dispatch_bf16_d128_defaults_to_cfvst():
 @pytest.mark.parametrize(
     "hq,hkv", [(128, 8), (32, 32), (16, 4), (40, 8), (28, 4)]  # MHA, GQA, non-pow2
 )
+
 def test_build_emits_kernel_for_in_scope_cohort(dtype, d, causal, hq, hkv):
     """The P0 body builds for every shape the port claims, and names itself
     consistently with the batch-unique name dispatch/the launcher cache key on."""
@@ -673,7 +674,7 @@ _CONTRACT_GRID = [
     dict(lds_row_pad=0),  # accepted: the unpadded A/B arm
     dict(lds_row_pad=2),  # REJECTED: not a multiple of 4 elements
     dict(v_row_pad=16),  # accepted
-    dict(v_row_pad=16,use_v_swizzle=False),  # accepted
+    dict(v_row_pad=16, use_v_swizzle=False),  # accepted
     dict(v_row_pad=-4),  # REJECTED: negative
     # --- private: use_cfvst (the one tri-state with a rejected direction) ---
     dict(dtype="fp16", use_cfvst=False),  # accepted: OFF is always legal
