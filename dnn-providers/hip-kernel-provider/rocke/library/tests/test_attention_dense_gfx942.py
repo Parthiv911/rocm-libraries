@@ -118,6 +118,7 @@ def test_supports_accepts_in_scope_cohort(dtype, d):
     ok, why = supports_attention_dense(_spec(dtype=dtype, head_size=d), arch="gfx942")
     assert ok, why
 
+
 def test_dispatch_bf16_d128_defaults_to_cfvst():
     from dispatch.attention import AttentionRequest, dense_spec_for_request
 
@@ -149,7 +150,6 @@ def test_dispatch_bf16_d128_defaults_to_cfvst():
 @pytest.mark.parametrize(
     "hq,hkv", [(128, 8), (32, 32), (16, 4), (40, 8), (28, 4)]  # MHA, GQA, non-pow2
 )
-
 def test_build_emits_kernel_for_in_scope_cohort(dtype, d, causal, hq, hkv):
     """The P0 body builds for every shape the port claims, and names itself
     consistently with the batch-unique name dispatch/the launcher cache key on."""
