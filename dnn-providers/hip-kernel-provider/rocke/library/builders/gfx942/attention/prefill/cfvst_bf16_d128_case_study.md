@@ -120,4 +120,3 @@ The current BF16 D128 kernel no longer reproduces the condition that originally 
 Numerical validation passes with both the previous and candidate policies, and same-session A/B measurements support enabling the existing CFVST path by default for BF16 D128.
 
 The change therefore removes the BF16-specific restriction while retaining the explicit non-CFVST path for comparison and debugging.
-
