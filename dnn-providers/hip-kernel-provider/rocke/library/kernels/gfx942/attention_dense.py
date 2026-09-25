@@ -232,6 +232,16 @@ if _BLOCK_M % 32 != 0:
 # and the baseline a conditional name tag compares against.
 _DEFAULT_LDS_ROW_PAD = 8
 _DEFAULT_IGLP = False
+_DEFAULT_N_BUFFERS = 1
+
+# AMDGPU post-RA scheduling-group masks. These are compile-time scheduler
+# directives, not runtime barriers. NBUF2 uses one SyncID to impose an explicit
+# LDSDMA -> MFMA -> LDSDMA -> MFMA cadence for K(next), then keeps V(next)
+# VMEM reads after the QK MFMA groups.
+_SCHED_MFMA = 0x008
+_SCHED_VMEM_READ = 0x020
+_SCHED_LDSDMA = 0x800
+_SCHED_PIPELINE_ID = 0
 
 
 @dataclass(frozen=True)
@@ -369,6 +379,14 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     #   Numerically safe in both directions here -- both softmax arguments are
     #   always <= 0 -- so correctness never depends on it; the gate is pure perf.
     use_exp2_fast: bool | None = None
+
+    # n_buffers: LDS ping-pong depth for the experimental software-pipelined path.
+    #   1 is the shipped single-buffer body. 2 is currently admitted only for
+    #   D128/block_n=32 on the CFVST path, where two K/V buffer sets fit in gfx942's
+    #   64 KB LDS. The nbuf2 path sends K(next) directly into the inactive LDS plane
+    #   and uses AMDGPU scheduling groups to interleave those LDSDMA ops with current
+    #   QK MFMAs. V(next) is still staged in VGPRs because CFVST needs the transpose.
+    n_buffers: int = _DEFAULT_N_BUFFERS
 
     # NOTE -- waves_per_eu is deliberately NOT redeclared here. It is an INHERITED
     #   field (``AttentionDenseSpec.waves_per_eu``), and the flat spec is what makes
@@ -561,6 +579,8 @@ def _tuning_name_tags(spec: "Gfx942AttentionDenseSpec") -> str:
         parts.append("e2f1" if e2f else "e2f0")
     if spec.iglp != _DEFAULT_IGLP:
         parts.append("iglp1" if spec.iglp else "iglp0")
+    if spec.n_buffers != _DEFAULT_N_BUFFERS:
+        parts.append(f"nbuf{spec.n_buffers}")
     return "".join(f"_{p}" for p in parts)
 
 
@@ -828,7 +848,7 @@ def _lds_bytes(spec: "Gfx942AttentionDenseSpec") -> int:
     else:
         # V keeps the natural [token, dim] async-DMA layout (D64, naive read).
         v_bytes = spec.block_n * _lds_row_stride(spec) * 2
-    return k_bytes + v_bytes
+    return spec.n_buffers * (k_bytes + v_bytes)
 
 
 def supports_attention_dense(
@@ -905,6 +925,24 @@ def supports_attention_dense(
         return False, "gfx942 attention_dense: sliding_window not yet supported"
     if spec.use_sinks:
         return False, "gfx942 attention_dense: sinks not yet supported"
+
+    # Experimental NBUF2 software pipeline. Keep this deliberately narrow until the
+    # BN32/D128 path is numerically validated and timed. NBUF1 remains the shipped
+    # default and dispatch never sets this field.
+    if spec.n_buffers not in (1, 2):
+        return False, f"n_buffers must be 1 or 2, got {spec.n_buffers}"
+    if spec.n_buffers == 2:
+        if spec.block_n != 32:
+            return False, "n_buffers=2 currently requires block_n=32"
+        if spec.head_size != 128:
+            return False, "n_buffers=2 currently requires head_size=128"
+        if not spec.resolved_use_cfvst():
+            return False, "n_buffers=2 currently requires the conflict-free V path"
+        if spec.iglp:
+            return False, (
+                "n_buffers=2 custom sched_group_barrier pipeline cannot be combined "
+                "with iglp"
+            )
 
     # --- gfx942-private sweep knobs. Validated here rather than only in the builder
     # because the module contract is support() => build(): a knob that only the
@@ -1097,6 +1135,7 @@ def _build_attention_dense_single_buffer(
     BLOCK_M = spec.block_m
     WAVES = BLOCK_M // 32  # 8
     BN = spec.block_n
+    NBUF = spec.n_buffers
 
     N_SUB = BN // 32  # key 32-tiles per KV tile
     D_TILES = D // 32  # head-dim 32-tiles
@@ -1154,10 +1193,10 @@ def _build_attention_dense_single_buffer(
         K_GROUP = ROWS_PER_INSTR  # rows per async-DMA instruction (=2 at D64)
         K_GROUP_STRIDE = _k_group_stride(spec)  # rows_per_instr*D + pad elems
         K_lds = b.smem_alloc(
-            dtype, [1, BN // K_GROUP, K_GROUP_STRIDE], name_hint="Klds"
+            dtype, [NBUF, BN // K_GROUP, K_GROUP_STRIDE], name_hint="Klds"
         )
     else:
-        K_lds = b.smem_alloc(dtype, [1, BN, LDROW], name_hint="Klds")
+        K_lds = b.smem_alloc(dtype, [NBUF, BN, LDROW], name_hint="Klds")
     if USE_CFVST:
         # V stored TRANSPOSED (P1 conflict-free V): [dim, token] with token inner and
         # padded by resolved_v_row_pad, so the PV A-operand read is a contiguous
@@ -1166,7 +1205,7 @@ def _build_attention_dense_single_buffer(
         # the other is the _lds_bytes budget -- and both take it from the same
         # resolver on the same spec, so the budget cannot under-count this allocation.
         V_LDROW = BN + spec.resolved_v_row_pad()
-        V_lds = b.smem_alloc(dtype, [1, D, V_LDROW], name_hint="VldsT")
+        V_lds = b.smem_alloc(dtype, [NBUF, D, V_LDROW], name_hint="VldsT")
         # V^T bank-conflict swizzle (col' = key ^ ((dim & V_SWZ_MASK) << 2)). Whether it
         # is emitted is an independent spec decision (resolved_use_v_swizzle), NOT
         # derived from the row width, so the pad-value sweep cannot silently toggle it;
@@ -1182,7 +1221,16 @@ def _build_attention_dense_single_buffer(
         # a future call on this path is a no-op, not a NameError.
         SWZ_V = False
         V_SWZ_MASK = 0
-        V_lds = b.smem_alloc(dtype, [1, BN, LDROW], name_hint="Vlds")
+        V_lds = b.smem_alloc(dtype, [NBUF, BN, LDROW], name_hint="Vlds")
+
+    if KPAD_D64:
+        K_BYTES_PER_BUF = (BN // K_GROUP) * K_GROUP_STRIDE * 2
+    else:
+        K_BYTES_PER_BUF = BN * LDROW * 2
+    if USE_CFVST:
+        V_BYTES_PER_BUF = D * V_LDROW * 2
+    else:
+        V_BYTES_PER_BUF = BN * LDROW * 2
 
     n_ktiles = Skv // BN
     n_per = BLOCK_M // BN
@@ -1249,11 +1297,13 @@ def _build_attention_dense_single_buffer(
     else:
         V_TOK_PAIRS = V_DIM_PAIRS = V_BLOCKS = V_ITEMS = 0
 
-    def _cfvst_store_v(payload):
+    def _cfvst_store_v(payload, buf_idx=None):
         """perm_b32 2x2 transpose + contiguous ds_write publishing V_lds[dim, token].
 
         CTA-invariant: reads only the per-tile payload and writes V_lds (a fixed
         allocation), so it is shared by every work item."""
+        if NBUF > 1 and buf_idx is None:
+            raise ValueError("cfvst store requires buf_idx when n_buffers > 1")
         for d0, t0, x0, x1 in payload:
             # Each output i32 holds 2 CONSECUTIVE tokens (t0, t0+1) at one fixed dim.
             row_d0 = b.perm_b32(x0, x1, b.const_i32(0x01000504))  # (V[t0,d0], V[t1,d0])
@@ -1276,18 +1326,18 @@ def _build_attention_dense_single_buffer(
                 c0, c1 = t0, t0
             b.smem_store_vN(
                 V_lds,
-                [b.const_i32(0), d0, c0],
+                [b.const_i32(0) if NBUF == 1 else buf_idx, d0, c0],
                 b.bitcast(row_d0, VectorType(dtype, 2)),
                 2,
             )
             b.smem_store_vN(
                 V_lds,
-                [b.const_i32(0), d1, c1],
+                [b.const_i32(0) if NBUF == 1 else buf_idx, d1, c1],
                 b.bitcast(row_d1, VectorType(dtype, 2)),
                 2,
             )
 
-    def read_v(dt, kk):
+    def read_v(dt, kk, buf_idx=None):
         """PV A-operand = V^T[dim, key]. dim=dt*32+lane_m, keys=kk*8+lane_h*4+{0..3}.
 
         cfvst (D128): the 4 keys are CONTIGUOUS in the transposed V_lds[dim, token],
@@ -1303,6 +1353,8 @@ def _build_attention_dense_single_buffer(
         belongs there, not on this read.
         naive (D64 / bf16-D128): element-wise from V_lds[key, dim] (bank-heavy, but
         those configs are VGPR-bound / spill under cfvst, not LDS-read-bound)."""
+        if NBUF > 1 and buf_idx is None:
+            raise ValueError("V read requires buf_idx when n_buffers > 1")
         if USE_CFVST:
             dim_row = b.add(b.const_i32(dt * 32), lane_m)
             key0 = b.add(b.const_i32(kk * 8), d_base)
@@ -1311,22 +1363,26 @@ def _build_attention_dense_single_buffer(
                 m = b.land(dim_row, b.const_i32(V_SWZ_MASK))
                 s = b.shl(m, b.const_i32(2))
                 col = b.xor(key0, s)
-            return b.smem_load_vN(V_lds, b.const_i32(0), dim_row, col, dtype=dtype, n=4)
+            return b.smem_load_vN(
+                V_lds, b.const_i32(0) if NBUF == 1 else buf_idx, dim_row, col, dtype=dtype, n=4
+            )
         dim_col = b.add(b.const_i32(dt * 32), lane_m)
         elems = []
         for j in range(4):
             key = b.add(b.add(b.const_i32(kk * 8), d_base), b.const_i32(j))
-            vv = b.smem_load_vN(V_lds, b.const_i32(0), key, dim_col, dtype=dtype, n=1)
+            vv = b.smem_load_vN(
+                V_lds, b.const_i32(0) if NBUF == 1 else buf_idx, key, dim_col, dtype=dtype, n=1
+            )
             elems.append(b.vec_extract(vv, 0))
         return b.vec_pack(elems, dtype)
 
-    def do_pv(o_acc_in, p_packs):
+    def do_pv(o_acc_in, p_packs, buf_idx=None):
         out = []
         for dt in range(D_TILES):
             acc_o = o_acc_in[dt]
             for kk in range(KK_STEPS):
                 acc_o = mfma_32x32x8_for_dtype(
-                    b, dtype, read_v(dt, kk), p_packs[kk], acc_o
+                    b, dtype, read_v(dt, kk, buf_idx), p_packs[kk], acc_o
                 )
             out.append(acc_o)
         return out
@@ -1366,11 +1422,26 @@ def _build_attention_dense_single_buffer(
             ]
             q_packs.append(b.vec_pack(elems, dtype))
 
-        def _async_load(rsrc, lds_base, tile_key0, group_pad=False):
+        def _async_load(
+            rsrc,
+            lds_base,
+            tile_key0,
+            group_pad=False,
+            buf_idx=None,
+            bytes_per_buf=None,
+        ):
+            if NBUF > 1:
+                if buf_idx is None or bytes_per_buf is None:
+                    raise ValueError("buffered async load requires buf_idx and bytes_per_buf")
+                buf_off = b.mul(b.zext(buf_idx, I64), b.const_i64(bytes_per_buf))
+            else:
+                buf_off = None
             if ROWS_PER_INSTR == 1:
                 for r in range(ROWS_PER_WAVE):
                     row = b.add(b.mul(wave, b.const_i32(ROWS_PER_WAVE)), b.const_i32(r))
                     row_lds_off = b.zext(b.mul(row, b.const_i32(K_LDROW_BYTES)), I64)
+                    if buf_off is not None:
+                        row_lds_off = b.add(buf_off, row_lds_off)
                     row_base = b.smem_ptr_add(lds_base, row_lds_off)
                     gkey = b.add(tile_key0, row)
                     gcol = b.mul(lane, b.const_i32(2))
@@ -1409,6 +1480,8 @@ def _build_attention_dense_single_buffer(
                         row_lds_off = b.zext(
                             b.mul(row0, b.const_i32(K_LDROW_BYTES)), I64
                         )
+                    if buf_off is not None:
+                        row_lds_off = b.add(buf_off, row_lds_off)
                     row_base = b.smem_ptr_add(lds_base, row_lds_off)
                     gkey = b.add(b.add(tile_key0, row0), sub_row)
                     voff = b.add(
@@ -1418,49 +1491,102 @@ def _build_attention_dense_single_buffer(
                         rsrc, row_base, b.mul(voff, b.const_i32(2)), zero_soff, 1
                     )
 
-        def load_tile(tile_idx):
+        def _async_load_k_row(tile_idx, buf_idx, row_in_wave: int):
+            """Issue one D128 K row directly into the inactive LDS plane.
+
+            NBUF2/BN32 only. The current tile's K fragments are first read out of
+            K_lds[cur] into VGPRs; only then are these next-tile global->LDS DMAs
+            interleaved with the current QK MFMAs. That mirrors the useful part of
+            AITER's schedule without staging *future* K in registers.
+            """
+            if NBUF != 2 or ROWS_PER_INSTR != 1 or BN != 32:
+                raise ValueError(
+                    "interleaved K DMA is only implemented for D128/BN32/NBUF2"
+                )
+            if not (0 <= row_in_wave < ROWS_PER_WAVE):
+                raise ValueError(
+                    f"row_in_wave={row_in_wave} outside [0,{ROWS_PER_WAVE})"
+                )
+
+            tile_key0 = b.mul(tile_idx, b.const_i32(BN))
+            buf_off = b.mul(b.zext(buf_idx, I64), b.const_i64(K_BYTES_PER_BUF))
+            row = b.add(
+                b.mul(wave, b.const_i32(ROWS_PER_WAVE)),
+                b.const_i32(row_in_wave),
+            )
+            row_lds_off = b.add(
+                buf_off,
+                b.zext(b.mul(row, b.const_i32(K_LDROW_BYTES)), I64),
+            )
+            row_base = b.smem_ptr_add(K_lds_addr, row_lds_off)
+            gkey = b.add(tile_key0, row)
+            gcol = b.mul(lane, b.const_i32(2))
+            voff = b.add(
+                b.add(k_base, b.mul(gkey, b.const_i32(stride_k_tok))),
+                gcol,
+            )
+            b.async_buffer_load_lds_addr(
+                k_rsrc,
+                row_base,
+                b.mul(voff, b.const_i32(2)),
+                zero_soff,
+                1,
+            )
+
+        def load_tile(tile_idx, buf_idx=None):
             # cfvst (D128): K only; V is fed through the perm_b32 store path below
             # (async DMA would land V in the WRONG [token, dim] orientation for a
             # conflict-free read). Naive (D64): K and V both via async DMA, natural
             # [token, dim].
             tk0 = b.mul(tile_idx, b.const_i32(BN))
-            _async_load(k_rsrc, K_lds_addr, tk0, group_pad=KPAD_D64)
+            _async_load(
+                k_rsrc,
+                K_lds_addr,
+                tk0,
+                group_pad=KPAD_D64,
+                buf_idx=buf_idx,
+                bytes_per_buf=K_BYTES_PER_BUF,
+            )
             if not USE_CFVST:
-                _async_load(v_rsrc, V_lds_addr, tk0)
+                _async_load(
+                    v_rsrc,
+                    V_lds_addr,
+                    tk0,
+                    buf_idx=buf_idx,
+                    bytes_per_buf=V_BYTES_PER_BUF,
+                )
+
+        def _cfvst_load_v_item(tile_idx, it: int):
+            """Issue one unrolled CFVST V item (two VMEM loads) into VGPRs."""
+            tile_tok0 = b.mul(tile_idx, b.const_i32(BN))
+            blk = b.add(b.mul(b.const_i32(it), b.const_i32(THREADS)), tid)
+            # dim-pair is the fastest-varying coord so adjacent lanes issue
+            # coalesced VMEM loads over the natural [token, dim] layout.
+            tg = b.div(blk, b.const_i32(V_DIM_PAIRS))
+            dg = b.mod(blk, b.const_i32(V_DIM_PAIRS))
+            t0 = b.mul(tg, b.const_i32(2))
+            d0 = b.mul(dg, b.const_i32(2))
+            gk0 = b.add(tile_tok0, t0)
+            gk1 = b.add(gk0, b.const_i32(1))
+            # byte offset of (token, d0); contiguous dim pair -> one 2-half load.
+            eoff0 = b.add(b.add(k_base, b.mul(gk0, b.const_i32(stride_k_tok))), d0)
+            eoff1 = b.add(b.add(k_base, b.mul(gk1, b.const_i32(stride_k_tok))), d0)
+            x0 = b.buffer_load_vN(
+                v_rsrc, b.mul(eoff0, b.const_i32(2)), zero_soff, dtype, 2
+            )
+            x1 = b.buffer_load_vN(
+                v_rsrc, b.mul(eoff1, b.const_i32(2)), zero_soff, dtype, 2
+            )
+            return (d0, t0, b.bitcast(x0, I32), b.bitcast(x1, I32))
 
         def _cfvst_load_v(tile_idx):
-            """Issue the cfvst VMEM loads and keep each thread's V tile in VGPRs.
+            """Issue all CFVST V VMEM loads and keep the payload in VGPRs."""
+            return [_cfvst_load_v_item(tile_idx, it) for it in range(V_ITEMS)]
 
-            Returns a payload of ``(d0, t0, x0, x1)`` per unrolled item: ``x0``/``x1``
-            are the i32-packed ``<2 x elem>`` loads of token rows ``t0``/``t0+1`` at
-            the contiguous dim pair ``(d0, d0+1)``. Loads go through ``v_rsrc`` so an
-            out-of-range token is hardware-clamped to 0 (matches the async path)."""
-            tile_tok0 = b.mul(tile_idx, b.const_i32(BN))
-            payload = []
-            for it in range(V_ITEMS):
-                blk = b.add(b.mul(b.const_i32(it), b.const_i32(THREADS)), tid)
-                # dim-pair is the fastest-varying coord so adjacent lanes issue
-                # coalesced VMEM loads over the natural [token, dim] layout.
-                tg = b.div(blk, b.const_i32(V_DIM_PAIRS))
-                dg = b.mod(blk, b.const_i32(V_DIM_PAIRS))
-                t0 = b.mul(tg, b.const_i32(2))
-                d0 = b.mul(dg, b.const_i32(2))
-                gk0 = b.add(tile_tok0, t0)
-                gk1 = b.add(gk0, b.const_i32(1))
-                # byte offset of (token, d0); contiguous dim pair -> one 2-half load.
-                eoff0 = b.add(b.add(k_base, b.mul(gk0, b.const_i32(stride_k_tok))), d0)
-                eoff1 = b.add(b.add(k_base, b.mul(gk1, b.const_i32(stride_k_tok))), d0)
-                x0 = b.buffer_load_vN(
-                    v_rsrc, b.mul(eoff0, b.const_i32(2)), zero_soff, dtype, 2
-                )
-                x1 = b.buffer_load_vN(
-                    v_rsrc, b.mul(eoff1, b.const_i32(2)), zero_soff, dtype, 2
-                )
-                payload.append((d0, t0, b.bitcast(x0, I32), b.bitcast(x1, I32)))
-            return payload
-
-        def do_qk():
+        def do_qk(buf_idx=None):
             """S^T = K@Q^T via the 32x32x8 atom (K-doubled)."""
+            if NBUF > 1 and buf_idx is None:
+                raise ValueError("QK read requires buf_idx when n_buffers > 1")
             s_reg = []
             for nsub in range(N_SUB):
                 acc = b.zero_vec_f32(16)
@@ -1477,7 +1603,7 @@ def _build_attention_dense_single_buffer(
                     if KPAD_D64:
                         k_pack = b.smem_load_vN(
                             K_lds,
-                            b.const_i32(0),
+                            b.const_i32(0) if NBUF == 1 else buf_idx,
                             k_group,
                             b.add(k_within_off, col),
                             dtype=dtype,
@@ -1485,10 +1611,113 @@ def _build_attention_dense_single_buffer(
                         )
                     else:
                         k_pack = b.smem_load_vN(
-                            K_lds, b.const_i32(0), krow, col, dtype=dtype, n=4
+                            K_lds,
+                            b.const_i32(0) if NBUF == 1 else buf_idx,
+                            krow,
+                            col,
+                            dtype=dtype,
+                            n=4,
                         )
                     acc = mfma_32x32x8_for_dtype(b, dtype, k_pack, q_packs[ks], acc)
                 s_reg.append([b.vec_extract(acc, i) for i in range(16)])
+            return s_reg
+
+        def do_qk_pipelined(cur_buf, next_tile_idx, next_buf):
+            """BN32/NBUF2 QK with an explicit LDSDMA/MFMA scheduling pipeline.
+
+            Source order alone was not enough: LLVM kept hoisting V(next) ahead of
+            K(next) and delayed the first direct K->LDS DMA.  Here we use
+            ``sched_group_barrier`` with one SyncID to give the post-RA scheduler an
+            explicit cadence:
+
+              K0 LDSDMA -> 2 MFMA ->
+              K1 LDSDMA -> 2 MFMA ->
+              K2 LDSDMA -> 2 MFMA ->
+              K3 LDSDMA -> 2 MFMA ->
+              remaining 8 MFMA.
+
+            V(next) is grouped by the caller *after* this final MFMA group.  Future K
+            still goes directly to the inactive LDS plane; it is never staged in
+            VGPRs.
+            """
+            if NBUF != 2 or BN != 32 or N_SUB != 1 or ROWS_PER_INSTR != 1:
+                raise ValueError(
+                    "pipelined QK is only implemented for D128/BN32/NBUF2"
+                )
+            if V_ITEMS != 2:
+                raise ValueError(
+                    f"expected V_ITEMS=2 for D128/BN32/NBUF2, got {V_ITEMS}"
+                )
+            if spec.iglp:
+                raise ValueError(
+                    "NBUF2 sched_group_barrier pipeline cannot be combined with iglp"
+                )
+
+            # Pull the current K row's entire D=128 fragment out of LDS before any
+            # next-buffer global->LDS DMA is issued. 16 x <4xbf16> packs correspond
+            # to the 16 CDNA3 K=8 QK steps.
+            krow = lane_m
+            k_packs = []
+            for ks in range(K_STEPS):
+                col = b.add(b.const_i32(ks * 8), d_base)
+                k_packs.append(
+                    b.smem_load_vN(
+                        K_lds,
+                        cur_buf,
+                        krow,
+                        col,
+                        dtype=dtype,
+                        n=4,
+                    )
+                )
+
+            # Current K must be register-resident before writes to the inactive K LDS
+            # plane begin. This is an LDS drain only; future VMEM is still free to run.
+            b.s_waitcnt(lgkmcnt=0)
+
+            acc = b.zero_vec_f32(16)
+
+            # Group 1: K0 direct global->LDS DMA. The group directive applies to the
+            # preceding matching instruction, and groups sharing SyncID are ordered by
+            # the AMDGPU post-RA scheduler.
+            _async_load_k_row(next_tile_idx, next_buf, 0)
+            b.sched_group_barrier(
+                _SCHED_LDSDMA, 1, _SCHED_PIPELINE_ID
+            )
+
+            # First half of QK: explicitly alternate two MFMAs with one next-K LDSDMA.
+            # K1/K2/K3 are issued after MFMA pairs 0-1, 2-3 and 4-5.
+            next_k_row = {1: 1, 3: 2, 5: 3}
+            for ks in range(K_STEPS):
+                acc = mfma_32x32x8_for_dtype(
+                    b, dtype, k_packs[ks], q_packs[ks], acc
+                )
+
+                if ks in next_k_row:
+                    b.sched_group_barrier(
+                        _SCHED_MFMA, 2, _SCHED_PIPELINE_ID
+                    )
+                    _async_load_k_row(
+                        next_tile_idx,
+                        next_buf,
+                        next_k_row[ks],
+                    )
+                    b.sched_group_barrier(
+                        _SCHED_LDSDMA, 1, _SCHED_PIPELINE_ID
+                    )
+
+                # After K3, close its two-MFMA overlap group explicitly.
+                if ks == 7:
+                    b.sched_group_barrier(
+                        _SCHED_MFMA, 2, _SCHED_PIPELINE_ID
+                    )
+
+            # Keep the final eight QK MFMAs ahead of the caller's V(next) VMEM group.
+            b.sched_group_barrier(
+                _SCHED_MFMA, 8, _SCHED_PIPELINE_ID
+            )
+
+            s_reg = [[b.vec_extract(acc, i) for i in range(16)]]
             return s_reg
 
         def do_mask(s_reg, tile_idx):
@@ -1512,7 +1741,7 @@ def _build_attention_dense_single_buffer(
         else:
             n_up = n_ktiles_c
 
-        # ---- online-softmax main loop (non-pipelined, single buffer) ----
+        # ---- online-softmax main loop ----
         m0 = neg_inf
         l0 = b.const_f32(0.0)
         o0 = [b.zero_vec_f32(16) for _ in range(D_TILES)]
@@ -1520,61 +1749,9 @@ def _build_attention_dense_single_buffer(
             (f"o{dt}", o0[dt]) for dt in range(D_TILES)
         ]
 
-        # elide_trailing_barrier=False: the trailing barrier is NOT an optimizable
-        # rendezvous -- it is the WAR guard on the SINGLE K/V LDS buffer. The elide
-        # pass (lower_llvm._lower_unrolled_for) targets body_ops[-2], which is exactly
-        # this barrier's slot, and only misses it today because the op-name match is
-        # hardcoded to "tile.sync" and unroll defaults False. Pin it so a future
-        # unroll=True (P3) or a sync_lds_only->sync swap cannot silently delete it.
-        # Verified byte-identical codegen with and without the flag today.
-        loop = b.scf_for_iter(
-            b.const_i32(0),
-            n_up,
-            b.const_i32(1),
-            iter_args,
-            iv_name="kt",
-            elide_trailing_barrier=False,
-        )
-        with loop as (j, carry):
-            m_i = carry[0]
-            l_i = carry[1]
-            o_acc = list(carry[2 : 2 + D_TILES])
-
-            if spec.iglp:
-                # Runbook lever 7: one canned-scheduler hint at the loop-body top.
-                # Only meaningful on the cfvst path (in-loop ds_write to interleave).
-                b.iglp_opt(0)
-
-            if USE_CFVST:
-                load_tile(j)  # K async DMA -> K_lds
-                v_payload = _cfvst_load_v(
-                    j
-                )  # V register buffer_loads (natural [token,dim])
-                # Drain BOTH the K async DMA and the V register loads (all vmcnt)
-                # before the V perm+store reads those registers and before QK reads
-                # K_lds.
-                b.s_waitcnt(vmcnt=0)
-                _cfvst_store_v(v_payload)  # perm_b32 -> ds_write V_lds[dim,token]
-                # Publish K_lds (DMA) AND V_lds (ds_write) to all waves. This MUST
-                # drain lgkmcnt for the V ds_write and cannot be a bare s_barrier:
-                # gfx90a+ set FeatureBackOffBarrier, so LLVM would sink the lgkm wait
-                # past the barrier to the ds_read consumer (the P0 read-after-barrier
-                # race, now on the tile-START barrier because V publication is an
-                # in-loop ds_write). sync_lds_only() emits the lgkm drain BEFORE the
-                # barrier (CK Tile block_sync_lds). vmcnt is already 0, no full sync.
-                b.sync_lds_only()
-            else:
-                # Naive (D64): K and V both async-DMA'd into their natural layout.
-                # Drain the DMA (vmcnt) then a plain barrier -- V is not an in-loop
-                # ds_write here, so the tile-start barrier needs no lgkm drain (the
-                # DMA landed the data; the trailing sync_lds_only guards the
-                # read-before-overwrite).
-                load_tile(j)
-                b.s_waitcnt(vmcnt=0)
-                b.s_barrier_bare()
-
-            s = do_qk()
-            do_mask(s, j)
+        def _finish_loaded_tile(tile_idx, s, m_i, l_i, o_acc, buf_idx=None):
+            """Mask + online softmax + PV for an already-computed QK tile."""
+            do_mask(s, tile_idx)
 
             # tile max over keys (both lane-halves) for this query.
             local_max = neg_inf
@@ -1583,31 +1760,10 @@ def _build_attention_dense_single_buffer(
                     local_max = b.fmax(local_max, s[nsub][i])
             tile_max = b.fmax(local_max, b.warp_shuffle_xor(local_max, 32))
             m_new = b.fmax(m_i, tile_max)
-            # P2: exp2_fast (llvm.amdgcn.exp2.f32 -> one v_exp_f32) drops the ~5-VALU
-            # guarded range reduction that plain exp2 (llvm.exp2.f32) emits. Safe
-            # here: both softmax args are always <= 0 -- alpha's m_i - m_new (m_new =
-            # max(m_i, tile_max) >= m_i) and p's s - m_new (m_new >= tile_max >= every
-            # s) -- exactly exp2_fast's precondition (no overflow; v_exp_f32 flushes
-            # large negatives to 0). Cuts ~99 VALU/tile at D128, the dominant
-            # MFMA-starving residual once conflict-free V (P1) lands. Enabled by
-            # _use_exp2_fast for every config except short-sequence bf16 D128, which
-            # reverts to plain exp2; rationale + seqlen gate in that docstring.
             exp2 = b.exp2_fast if spec.resolved_use_exp2_fast() else b.exp2
             alpha = exp2(b.fsub(m_i, m_new))
 
-            # P2 fused rescale: compute each exp2 inline, accumulate l_local, and
-            # cast->pack it into the PV B-operand in ONE pass. The f32 p value dies
-            # after its two uses (the l_local fadd + the dtype cast) instead of
-            # staying live across the whole l_local reduction AND a separate cast/pack
-            # pass. Peak live f32 p regs drop from N_SUB*16 (=32 at D128) to ~one
-            # pack, freeing ~28 VGPR (plan §6.1).
-            #
-            # The kk->(nsub,i) map is the PV B-operand relayout (key=kk*8+lane_h*4+j
-            # maps to QK C-reg nsub=kk//4, i=(kk%4)*4+j -- same lane_h split, no
-            # cross-lane). KK_STEPS==N_SUB*4, so this covers every p element exactly
-            # once, and i steps 0,1,2,3 / 4,5,6,7 / ... within each nsub -- the
-            # identical accumulation order as a nested (nsub,i) loop, so l_local and
-            # the packed casts are numerically bit-identical: pure live-range relief.
+            # P2 fused rescale: preserve the existing accumulation/packing order.
             l_local = b.const_f32(0.0)
             p_packs = []
             for kk in range(KK_STEPS):
@@ -1628,31 +1784,127 @@ def _build_attention_dense_single_buffer(
                 )
                 for dt in range(D_TILES)
             ]
-            o_acc = do_pv(o_acc, p_packs)
-            # Tile done; the next iteration refills the SINGLE K/V buffer (K via async
-            # DMA, V via the perm_b32 ds_write), so every wave's LDS reads must have
-            # LANDED (not just issued) before any wave starts writing. This MUST drain
-            # lgkmcnt and cannot be a bare s_barrier: gfx90a+ set FeatureBackOffBarrier,
-            # so SIInsertWaitcnts skips the conservative pre-barrier drain and places
-            # the lgkm wait at the ds_read's CONSUMER -- which the scheduler is free to
-            # sink past the barrier. Measured before the fix: ds_read_u16 x4 ->
-            # s_barrier -> s_waitcnt lgkmcnt(0). sync_lds_only() emits the drain BEFORE
-            # the barrier (CK Tile block_sync_lds); real LDS ops (mayLoad/mayStore)
-            # cannot be scheduled across the side-effecting s_waitcnt, so the window is
-            # structurally closed. vmcnt is deliberately NOT drained: it is already 0
-            # (the tile-start s_waitcnt(vmcnt=0) drained this tile's DMA and NBUF=1
-            # issues no new DMA until the next iteration), so a full sync() would add a
-            # dead instruction. NOTE: the gfx950 sibling is NOT a precedent for a bare
-            # barrier here. Its NBUF=2 separates K (read j%2, written (j+1)%2) but NOT
-            # V: it reads vbuf_prev=(j+1)%2 and writes pbuf=(j+1)%2 -- the SAME buffer,
-            # across a bare s_barrier_bare(). Correct there only by scheduler luck;
-            # tracked separately, do not copy that idiom.
-            b.sync_lds_only()
-            b.scf_yield(m_new, l_new, *o_acc)
+            o_acc = do_pv(o_acc, p_packs, buf_idx)
+            return m_new, l_new, o_acc
 
-        res = loop.results
-        l_i = res[1]
-        o_acc = list(res[2 : 2 + D_TILES])
+        def _compute_loaded_tile(tile_idx, m_i, l_i, o_acc, buf_idx=None):
+            """Compute one already-published KV tile; no global K/V loads here."""
+            s = do_qk(buf_idx)
+            return _finish_loaded_tile(tile_idx, s, m_i, l_i, o_acc, buf_idx)
+
+        if NBUF == 1:
+            # Existing shipped path: load -> full VMEM drain -> publish -> compute.
+            loop = b.scf_for_iter(
+                b.const_i32(0),
+                n_up,
+                b.const_i32(1),
+                iter_args,
+                iv_name="kt",
+                elide_trailing_barrier=False,
+            )
+            with loop as (j, carry):
+                m_i = carry[0]
+                l_i = carry[1]
+                o_acc = list(carry[2 : 2 + D_TILES])
+
+                if spec.iglp:
+                    b.iglp_opt(0)
+
+                if USE_CFVST:
+                    load_tile(j)
+                    v_payload = _cfvst_load_v(j)
+                    b.s_waitcnt(vmcnt=0)
+                    _cfvst_store_v(v_payload)
+                    b.sync_lds_only()
+                else:
+                    load_tile(j)
+                    b.s_waitcnt(vmcnt=0)
+                    b.s_barrier_bare()
+
+                m_new, l_new, o_acc = _compute_loaded_tile(j, m_i, l_i, o_acc)
+
+                # Single-buffer WAR guard before the next iteration overwrites LDS.
+                b.sync_lds_only()
+                b.scf_yield(m_new, l_new, *o_acc)
+
+            res = loop.results
+            l_i = res[1]
+            o_acc = list(res[2 : 2 + D_TILES])
+        else:
+            # Experimental BN32/NBUF2 path. Keep future K on the async global->LDS
+            # path (no future-K VGPR staging). The important difference from the
+            # first NBUF2 attempt is that do_qk_pipelined() first reads the ENTIRE
+            # current K fragment out of K_lds[cur], then interleaves K(next) DMAs
+            # into K_lds[next] among the current MFMAs. That removes the problematic
+            # "future K DMA immediately followed by current K ds_read" ordering.
+            buf0 = b.const_i32(0)
+            tile0 = b.const_i32(0)
+            load_tile(tile0, buf0)
+            v0 = _cfvst_load_v(tile0)
+            b.s_waitcnt(vmcnt=0)
+            _cfvst_store_v(v0, buf0)
+            b.sync_lds_only()
+
+            last_j = b.sub(n_up, b.const_i32(1))
+            loop = b.scf_for_iter(
+                b.const_i32(0),
+                last_j,
+                b.const_i32(1),
+                iter_args,
+                iv_name="kt_db",
+                elide_trailing_barrier=False,
+            )
+            with loop as (j, carry):
+                m_i = carry[0]
+                l_i = carry[1]
+                o_acc = list(carry[2 : 2 + D_TILES])
+
+                cur_buf = b.mod(j, b.const_i32(NBUF))
+                next_j = b.add(j, b.const_i32(1))
+                next_buf = b.mod(next_j, b.const_i32(NBUF))
+
+                # QK owns only the K pipeline: current K is consumed from the
+                # active LDS plane while K(next) is DMA'd directly to the inactive
+                # plane.  Only after QK has been emitted do we launch V(next).
+                # That gives K first claim on the QK overlap window and lets the
+                # CFVST V loads overlap mask/softmax/PV instead of competing with K.
+                s = do_qk_pipelined(cur_buf, next_j, next_buf)
+
+                # V(next) is four ordinary VMEM reads (2 CFVST items x 2 loads).
+                # Group them after every QK MFMA group using the same SyncID so LLVM
+                # cannot hoist them ahead of the K/MFMA cadence.
+                v_next = _cfvst_load_v(next_j)
+                b.sched_group_barrier(
+                    _SCHED_VMEM_READ, V_ITEMS * 2, _SCHED_PIPELINE_ID
+                )
+
+                m_new, l_new, o_acc = _finish_loaded_tile(
+                    j, s, m_i, l_i, o_acc, cur_buf
+                )
+
+                # Do not drain VMEM until all current-tile QK/softmax/PV work is done.
+                # vmcnt covers both the direct K(next)->LDS DMA and V(next) register
+                # loads. Then publish transposed V into the inactive plane and use the
+                # LDS-only rendezvous to make the whole next tile visible to all waves.
+                b.s_waitcnt(vmcnt=0)
+                _cfvst_store_v(v_next, next_buf)
+                b.sync_lds_only()
+                b.scf_yield(m_new, l_new, *o_acc)
+
+            # The loop stops one tile early so it never prefetches tile n_up. The
+            # final tile was published by the previous iteration (or by the prologue
+            # when n_up == 1), so consume it directly.
+            res = loop.results
+            m_i = res[0]
+            l_i = res[1]
+            o_acc = list(res[2 : 2 + D_TILES])
+            last_buf = b.mod(last_j, b.const_i32(NBUF))
+            m_i, l_i, o_acc = _compute_loaded_tile(
+                last_j, m_i, l_i, o_acc, last_buf
+            )
+            # Final LDS-read drain is required before a persistent CTA can recycle
+            # these buffers for its next work item.
+            b.sync_lds_only()
 
         # Epilogue: O[query,dim] = (P@V)/l, from the transposed C[dim,query] accum.
         rcp_l = b.rcp(l_i)
