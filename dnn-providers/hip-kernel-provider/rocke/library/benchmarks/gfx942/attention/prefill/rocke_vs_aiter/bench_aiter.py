@@ -20,7 +20,7 @@ argv = [
     "-iperm=0", "-operm=0",
     "-mask=1", "-lse=0",
     "-fwd_v3=1",
-    "-v3_bf16_cvt=2",
+    "-v3_bf16_cvt=0",   # RTNE
     "-mode=0",
     "-timer=gpu",
     "-kname=1",
