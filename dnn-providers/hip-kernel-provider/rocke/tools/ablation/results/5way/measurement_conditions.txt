@@ -1,0 +1,16 @@
+rocke_root=/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke
+device=AMD Instinct MI300X VF
+torch=2.13.0+rocm10.0.0
+hip=7.15.26333
+stream_ptr=0
+warmup=10
+rounds=5
+repeat=50
+seed=942
+validate=True
+causal=True
+persistent=auto
+num_persistent=304
+persist_decode=auto
+timed_call=direct KernelLauncher (no run_attention_dense_torch wrapper)
+cfvst_reference=historical pre-KDB/VPF single-buffer loop
