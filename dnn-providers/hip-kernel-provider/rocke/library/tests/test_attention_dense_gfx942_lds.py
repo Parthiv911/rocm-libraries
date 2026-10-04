@@ -288,13 +288,13 @@ def test_k_group_pad_grows_the_allocation_by_one_pad_per_row_group(pad):
 def test_capacity_boundary_allocation_is_exactly_capacity():
     """The gate is ``> capacity``, so a config landing on EXACTLY 65536 B is accepted.
 
-    bn128 / D128 / bf16 at ``lds_row_pad=0`` is that config: K and V are each
-    128*128*2 = 32768 B. Its emitted pool must be exactly the capacity -- if the
-    allocation were even one byte larger than the model, this is the case where the
-    gate's boundary would admit an overflow. The complementary supports()-side
-    assertion lives in ``test_attention_dense_gfx942.py``.
+    bn128 / D128 / bf16 at ``lds_row_pad=0`` with ``use_cfvst=False`` is that
+    config: K and V are each 128*128*2 = 32768 B. Its emitted pool must be exactly
+    the capacity -- if the allocation were even one byte larger than the model, this
+    is the case where the gate's boundary would admit an overflow. The complementary
+    supports()-side assertion lives in ``test_attention_dense_gfx942.py``.
     """
-    spec = _spec(block_n=128, head_size=128, dtype="bf16", lds_row_pad=0)
+    spec = _spec(block_n=128, head_size=128, dtype="bf16", lds_row_pad=0, use_cfvst=False)
     ok, why = supports_attention_dense(spec, arch="gfx942")
     assert ok, why
     assert _lds_bytes(spec) == _CAPACITY
