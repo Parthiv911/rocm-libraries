@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+export ROCM_VER=10.0.0
+
 ROOT=/root/gpu-bench
 REPO="$ROOT/rocm-libraries"
 PROVIDER="$REPO/dnn-providers/hip-kernel-provider"
@@ -16,8 +18,7 @@ BENCH_ROCKE="$HERE/bench_rocke.py"
 # rocprof-compute frontend
 ROCPROF_COMPUTE="$ROOT/venvs/rocprof/bin/rocprof-compute"
 
-# IMPORTANT:
-# Each workload uses rocprofv3 from its OWN ROCm 10 environment.
+# Each workload uses rocprofv3 from its own ROCm 10 environment.
 AITER_ROCPROF="$ROOT/venvs/aiter/bin/rocprofv3"
 ROCKE_ROCPROF="$ROOT/venvs/rocke/bin/rocprofv3"
 
@@ -28,6 +29,29 @@ OUT="$ROOT/profiles/rocprof_compute_d128_bf16_causal"
 AITER_NAME="aiter_d128_bf16_causal"
 ROCKE_NAME="rocke_d128_bf16_causal"
 
+# Target kernels.
+#
+# bench_aiter.py uses:
+#   -v3_bf16_cvt=0
+#
+# which selects RTNE:
+#   fmha_fwd_hd128_bf16_causal_rtne
+AITER_KERNEL="fmha_fwd_hd128_bf16_causal_rtne"
+ROCKE_KERNEL="rocke_attention_dense"
+
+# --------------------------------------------------------------------------
+# PC sampling
+#
+# MI300X / gfx942 supports stochastic hardware PC sampling.
+#
+# The default stochastic interval is 1048576 cycles. These attention
+# kernels are sub-millisecond, so use the minimum supported interval
+# (65536 cycles) to get substantially better sample density.
+# --------------------------------------------------------------------------
+
+PC_SAMPLING_METHOD="stochastic"
+PC_SAMPLING_INTERVAL="65536"
+
 echo "============================================================"
 echo "configuration"
 echo "============================================================"
@@ -35,7 +59,11 @@ echo "rocprof-compute : $ROCPROF_COMPUTE"
 echo "AITER rocprofv3 : $AITER_ROCPROF"
 echo "ROCKE rocprofv3 : $ROCKE_ROCPROF"
 echo "ROCKE python    : $ROCKE_PYTHON"
+echo "AITER kernel    : $AITER_KERNEL"
+echo "ROCKE kernel    : $ROCKE_KERNEL"
 echo "output          : $OUT"
+echo "PC method       : $PC_SAMPLING_METHOD"
+echo "PC interval     : $PC_SAMPLING_INTERVAL cycles"
 echo
 
 # --------------------------------------------------------------------------
@@ -99,10 +127,7 @@ echo "--- ROCKE rocprofv3 ---"
 mkdir -p "$OUT"
 
 # --------------------------------------------------------------------------
-# Make clean workload wrappers.
-#
-# These wrappers source the workload-specific ROCm environment and then exec
-# directly into the benchmark process.
+# Workload wrappers
 # --------------------------------------------------------------------------
 
 RUN_AITER="$OUT/run_aiter_profile.sh"
@@ -160,47 +185,59 @@ cd '$PROVIDER'
 
 cd "$OUT"
 
-# --------------------------------------------------------------------------
+# ==========================================================================
 # AITER
 #
-# NOTE:
-# ROCPROF is deliberately scoped to this ONE command.
+# IMPORTANT:
 #
-# DO NOT use:
-#   /root/gpu-bench/venvs/rocprof/bin/rocprofv3
+# No -b/--block option is used.
 #
-# We already proved AITER's own ROCm-10 rocprofv3 collects counters correctly.
-# --------------------------------------------------------------------------
+# Therefore rocprof-compute collects ALL standard available analysis
+# counters rather than only selected blocks.
+#
+# PC sampling is additionally enabled explicitly because it is not part
+# of normal counter collection.
+#
+# Roofline is also collected automatically because --no-roof is NOT used.
+# ==========================================================================
 
 echo
 echo "============================================================"
-echo "PROFILE AITER"
+echo "PROFILE AITER -- FULL COUNTERS + ROOFLINE + PC SAMPLING"
 echo "============================================================"
 
 ROCPROF="$AITER_ROCPROF" \
 "$ROCPROF_COMPUTE" profile \
     --overwrite \
+    --experimental \
+    --pc-sampling \
+    --pc-sampling-method stochastic \
+    --pc-sampling-interval 65536 \
     -n "$AITER_NAME" \
-    -b 2 3 7 10 12 16 17 \
-    -k fmha_fwd_hd128_bf16_causal_rtz \
+    -b 2 3 4 5 6 7 10 11 12 13 14 15 16 17 18 21 \
+    -k "$AITER_KERNEL" \
     -- \
     "$RUN_AITER"
 
-# --------------------------------------------------------------------------
+# ==========================================================================
 # ROCKE
-# --------------------------------------------------------------------------
+# ==========================================================================
 
 echo
 echo "============================================================"
-echo "PROFILE ROCKE"
+echo "PROFILE ROCKE -- FULL COUNTERS + ROOFLINE + PC SAMPLING"
 echo "============================================================"
 
 ROCPROF="$ROCKE_ROCPROF" \
 "$ROCPROF_COMPUTE" profile \
     --overwrite \
+    --experimental \
+    --pc-sampling \
+    --pc-sampling-method stochastic \
+    --pc-sampling-interval 65536 \
     -n "$ROCKE_NAME" \
-    -b 2 3 7 10 12 16 17 \
-    -k rocke_attention_dense \
+    -b 2 3 4 5 6 7 10 11 12 13 14 15 16 17 18 21 \
+    -k "$ROCKE_KERNEL" \
     -- \
     "$RUN_ROCKE"
 
@@ -241,12 +278,125 @@ echo "ROCKE:"
 echo "  $ROCKE_RUN"
 
 # --------------------------------------------------------------------------
-# Generate useful text analysis
+# Verify important collected files
 # --------------------------------------------------------------------------
 
 echo
 echo "============================================================"
-echo "MEMORY ANALYSIS"
+echo "COLLECTION SANITY CHECK"
+echo "============================================================"
+
+echo
+echo "--- AITER files ---"
+find "$AITER_RUN" -maxdepth 2 -type f | sort
+
+echo
+echo "--- ROCKE files ---"
+find "$ROCKE_RUN" -maxdepth 2 -type f | sort
+
+echo
+echo "--- Roofline files ---"
+find "$AITER_RUN" "$ROCKE_RUN" \
+    -name 'roofline.csv' \
+    -print
+
+echo
+echo "--- PC sampling files ---"
+find "$AITER_RUN" "$ROCKE_RUN" \
+    \( -iname '*pc*sampling*' -o -iname '*sampling*' \) \
+    -print || true
+
+# ==========================================================================
+# FULL INDIVIDUAL REPORTS
+#
+# No -b filter.
+#
+# This prints every analysis block for which data was collected.
+#
+# --pc-sampling-rows 0:
+#     show ALL sampled PC/ISA rows instead of the default top 10.
+#
+# --pc-sampling-sorting-type count:
+#     hottest / most frequently sampled instructions first.
+#
+# BF16 is selected for roofline visualization.
+# ==========================================================================
+
+echo
+echo "============================================================"
+echo "FULL AITER ANALYSIS"
+echo "============================================================"
+
+"$ROCPROF_COMPUTE" analyze \
+    -p "$AITER_RUN" \
+    --roofline-data-type BF16 \
+    --pc-sampling-sorting-type count \
+    --pc-sampling-rows 0 \
+    > "$OUT/aiter_full_report.txt"
+
+echo
+echo "============================================================"
+echo "FULL ROCKE ANALYSIS"
+echo "============================================================"
+
+"$ROCPROF_COMPUTE" analyze \
+    -p "$ROCKE_RUN" \
+    --roofline-data-type BF16 \
+    --pc-sampling-sorting-type count \
+    --pc-sampling-rows 0 \
+    > "$OUT/rocke_full_report.txt"
+
+# ==========================================================================
+# FULL SIDE-BY-SIDE COMPARISON
+# ==========================================================================
+
+echo
+echo "============================================================"
+echo "FULL AITER vs ROCKE COMPARISON"
+echo "============================================================"
+
+"$ROCPROF_COMPUTE" analyze \
+    -p "$AITER_RUN" "$ROCKE_RUN" \
+    --roofline-data-type BF16 \
+    --pc-sampling-sorting-type count \
+    --pc-sampling-rows 0 \
+    > "$OUT/compare_full_report.txt"
+
+# --------------------------------------------------------------------------
+# Separate PC-sampling-only reports
+#
+# Block 21 = PC Sampling.
+# Useful because the full report is very large.
+# --------------------------------------------------------------------------
+
+echo
+echo "============================================================"
+echo "PC SAMPLING REPORTS"
+echo "============================================================"
+
+"$ROCPROF_COMPUTE" analyze \
+    -p "$AITER_RUN" \
+    -b 21 \
+    --pc-sampling-sorting-type count \
+    --pc-sampling-rows 0 \
+    > "$OUT/aiter_pc_sampling.txt"
+
+"$ROCPROF_COMPUTE" analyze \
+    -p "$ROCKE_RUN" \
+    -b 21 \
+    --pc-sampling-sorting-type count \
+    --pc-sampling-rows 0 \
+    > "$OUT/rocke_pc_sampling.txt"
+
+# --------------------------------------------------------------------------
+# Memory-focused reports retained as convenience reports.
+#
+# These are subsets only; the full reports above contain everything.
+# --------------------------------------------------------------------------
+
+echo
+echo "============================================================"
+echo "MEMORY-FOCUSED REPORTS"
 echo "============================================================"
 
 "$ROCPROF_COMPUTE" analyze \
@@ -265,11 +415,7 @@ echo "============================================================"
     > "$OUT/compare_memory.txt"
 
 # --------------------------------------------------------------------------
-# BF16 ROOFLINE
-#
-# Profile mode above already collected roofline.csv because --no-roof is gone.
-#
-# The datatype is selected at ANALYZE time.
+# Roofline-only analysis
 # --------------------------------------------------------------------------
 
 echo
@@ -277,20 +423,21 @@ echo "============================================================"
 echo "BF16 ROOFLINE"
 echo "============================================================"
 
-echo "Generating AITER BF16 roofline..."
 "$ROCPROF_COMPUTE" analyze \
     -p "$AITER_RUN" \
     -b 4 \
     --roofline-data-type BF16 \
     || echo "WARNING: AITER roofline analysis failed"
 
-echo
-echo "Generating ROCKE BF16 roofline..."
 "$ROCPROF_COMPUTE" analyze \
     -p "$ROCKE_RUN" \
     -b 4 \
     --roofline-data-type BF16 \
     || echo "WARNING: ROCKE roofline analysis failed"
+
+# --------------------------------------------------------------------------
+# Summary
+# --------------------------------------------------------------------------
 
 echo
 echo "============================================================"
@@ -298,24 +445,38 @@ echo "DONE"
 echo "============================================================"
 
 echo
-echo "AITER:"
+echo "AITER workload:"
 echo "  $AITER_RUN"
 
 echo
-echo "ROCKE:"
+echo "ROCKE workload:"
 echo "  $ROCKE_RUN"
 
 echo
-echo "Text reports:"
+echo "Full reports:"
+echo "  $OUT/aiter_full_report.txt"
+echo "  $OUT/rocke_full_report.txt"
+echo "  $OUT/compare_full_report.txt"
+
+echo
+echo "PC sampling reports:"
+echo "  $OUT/aiter_pc_sampling.txt"
+echo "  $OUT/rocke_pc_sampling.txt"
+
+echo
+echo "Memory reports:"
 echo "  $OUT/aiter_memory.txt"
 echo "  $OUT/rocke_memory.txt"
 echo "  $OUT/compare_memory.txt"
 
 echo
-echo "BF16 roofline:"
-echo "  $ROCPROF_COMPUTE analyze -p \"$AITER_RUN\" -b 4 --roofline-data-type BF16"
-echo "  $ROCPROF_COMPUTE analyze -p \"$ROCKE_RUN\" -b 4 --roofline-data-type BF16"
+echo "AITER GUI:"
+echo "  $ROCPROF_COMPUTE analyze -p \"$AITER_RUN\" --experimental --gui 8050"
 
 echo
-echo "GUI:"
+echo "ROCKE GUI:"
+echo "  $ROCPROF_COMPUTE analyze -p \"$ROCKE_RUN\" --experimental --gui 8051"
+
+echo
+echo "Combined GUI:"
 echo "  $ROCPROF_COMPUTE analyze -p \"$AITER_RUN\" \"$ROCKE_RUN\" --experimental --gui"

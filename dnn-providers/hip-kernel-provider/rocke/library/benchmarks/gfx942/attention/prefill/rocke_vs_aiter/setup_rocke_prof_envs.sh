@@ -55,7 +55,7 @@ python3 -m venv "$ROCPROF_VENV"
 PY="$ROCPROF_VENV/bin/python"
 PIP="$PY -m pip"
 
-"$PY" -m pip install --upgrade pip
+$PIP install --upgrade pip
 
 
 echo
@@ -73,8 +73,26 @@ echo "============================================================"
 echo "4. Install rocprof-compute Python dependencies"
 echo "============================================================"
 
-$PIP install \
-    pyyaml
+# Locate the requirements.txt installed by the ROCm profiler wheel.
+ROCPROF_REQUIREMENTS="$(
+    "$PY" - <<'PY'
+import pathlib
+import _rocm_profiler
+
+root = pathlib.Path(_rocm_profiler.__file__).resolve().parent
+req = root / "libexec" / "rocprofiler-compute" / "requirements.txt"
+
+if not req.is_file():
+    raise SystemExit(f"requirements.txt not found: {req}")
+
+print(req)
+PY
+)"
+
+echo "rocprof-compute requirements:"
+echo "  $ROCPROF_REQUIREMENTS"
+
+$PIP install -r "$ROCPROF_REQUIREMENTS"
 
 
 echo
@@ -101,8 +119,36 @@ echo "--- rocprof-compute ---"
 "$ROCPROF_VENV/bin/rocprof-compute" --version
 
 echo
-echo "--- PyYAML ---"
-"$PY" -c 'import yaml; print("PyYAML", yaml.__version__)'
+echo "--- Python dependencies ---"
+$PIP check
+
+echo
+echo "--- Important package versions ---"
+"$PY" - <<'PY'
+import yaml
+import numpy
+import pandas
+import sqlalchemy
+import tabulate
+
+print("PyYAML    ", yaml.__version__)
+print("NumPy     ", numpy.__version__)
+print("Pandas    ", pandas.__version__)
+print("SQLAlchemy", sqlalchemy.__version__)
+print("Tabulate  ", tabulate.__version__)
+
+try:
+    import dash
+    print("Dash      ", dash.__version__)
+except Exception as e:
+    print("Dash check failed:", e)
+
+try:
+    import textual
+    print("Textual   ", textual.__version__)
+except Exception as e:
+    print("Textual check failed:", e)
+PY
 
 
 echo
@@ -124,6 +170,8 @@ echo "  $ROCKE_VENV/bin/rocprofv3"
 echo
 echo "Expected configuration in profile script:"
 cat <<EOF
+
+export ROCM_VER=$ROCM_VERSION
 
 ROCPROF_COMPUTE=$ROCPROF_VENV/bin/rocprof-compute
 
