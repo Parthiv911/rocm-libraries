@@ -578,6 +578,7 @@ def _tuning_name_tags(spec: "Gfx942AttentionDenseSpec") -> str:
         parts.append("kswz1")
     if spec.use_v_double_buffer:
         parts.append("vdb1")
+        parts.append("evpub1")
     vp = spec.resolved_v_row_pad()
     if vp != _v_row_pad(spec.head_size, spec.dtype, spec.block_n):
         parts.append(f"vrowpad{vp}")
@@ -1217,6 +1218,8 @@ def _build_attention_dense_single_buffer(
 
     tid = b.thread_id_x()
     wave = b.div(tid, b.const_i32(64))
+    # Wave-uniform DMA index, scalarized once outside the attention loops.
+    dma_wave = b.to_sgpr_u32(wave)
     lane = b.mod(tid, b.const_i32(64))
     lane_m = b.mod(lane, b.const_i32(32))
     lane_h = b.div(lane, b.const_i32(32))
@@ -1484,16 +1487,32 @@ def _build_attention_dense_single_buffer(
             bytes_per_buf,
             group_pad=False,
         ):
-            # ``buf_val`` selects an address-disjoint LDS slot.  The buffer offset is
-            # folded into the LDS pointer, while row addressing stays byte-identical to
-            # the original single-buffer loader.
-            buf_off = b.zext(b.mul(buf_val, b.const_i32(bytes_per_buf)), I64)
+            # ``buf_val`` selects an address-disjoint LDS slot.
+            #
+            # The DMA wave index is scalarized once outside the attention loops.
+            # For D128, also pin the combined [buffer + wave-row0] byte offset
+            # before advancing by compile-time row constants. This targets repeated
+            # v_readfirstlane instructions in direct-to-LDS destination setup;
+            # inspect generated ISA to verify the resulting register placement.
             if ROWS_PER_INSTR == 1:
+                wave_row0 = b.mul(dma_wave, b.const_i32(ROWS_PER_WAVE))
+                wave_row0_bytes = b.mul(
+                    wave_row0, b.const_i32(K_LDROW_BYTES)
+                )
+                buf_off_i32 = b.mul(buf_val, b.const_i32(bytes_per_buf))
+                wave_buf_off_i32 = b.add(buf_off_i32, wave_row0_bytes)
+                wave_buf_off_i32 = b.to_sgpr_u32(wave_buf_off_i32)
+                wave_base = b.smem_ptr_add(
+                    lds_base, b.zext(wave_buf_off_i32, I64)
+                )
+
                 for r in range(ROWS_PER_WAVE):
-                    row = b.add(b.mul(wave, b.const_i32(ROWS_PER_WAVE)), b.const_i32(r))
-                    row_off = b.zext(b.mul(row, b.const_i32(K_LDROW_BYTES)), I64)
-                    row_lds_off = b.add(buf_off, row_off)
-                    row_base = b.smem_ptr_add(lds_base, row_lds_off)
+                    # The same logical row selects the global source and swizzle.
+                    row = b.add(wave_row0, b.const_i32(r))
+                    row_base = b.smem_ptr_add(
+                        wave_base,
+                        b.zext(b.const_i32(r * K_LDROW_BYTES), I64),
+                    )
                     gkey = b.add(tile_key0, row)
                     # Keep the raw.ptr.buffer.load.lds destination lane-contiguous.
                     # To materialize the XOR-swizzled packed LDS layout, permute the
@@ -1515,18 +1534,20 @@ def _build_attention_dense_single_buffer(
                         rsrc, row_base, b.mul(voff, b.const_i32(2)), zero_soff, 1
                     )
             else:
+                # D64 keeps its addressing formulas and uses the scalar DMA wave index.
+                buf_off = b.zext(b.mul(buf_val, b.const_i32(bytes_per_buf)), I64)
                 lanes_per_row = D // 2
                 sub_row = b.div(lane, b.const_i32(lanes_per_row))
                 col = b.mul(b.mod(lane, b.const_i32(lanes_per_row)), b.const_i32(2))
                 for it in range(ROWS_PER_WAVE // ROWS_PER_INSTR):
                     row0 = b.add(
-                        b.mul(wave, b.const_i32(ROWS_PER_WAVE)),
+                        b.mul(dma_wave, b.const_i32(ROWS_PER_WAVE)),
                         b.const_i32(it * ROWS_PER_INSTR),
                     )
                     if group_pad:
                         grp = b.add(
                             b.mul(
-                                wave,
+                                dma_wave,
                                 b.const_i32(ROWS_PER_WAVE // ROWS_PER_INSTR),
                             ),
                             b.const_i32(it),
@@ -1678,8 +1699,15 @@ def _build_attention_dense_single_buffer(
         # ---- online-softmax update shared by pipelined and legacy paths ----
         exp2 = b.exp2_fast if spec.resolved_use_exp2_fast() else b.exp2
 
-        def finish_tile(s, tile_idx, m_i, l_i, o_acc, vbuf):
-            """Mask + online-softmax + PV for one already-computed QK score tile."""
+        def _finish_tile_pre_pv(s, tile_idx, m_i, l_i, o_acc):
+            """Mask + online-softmax + accumulator rescale, stopping before PV.
+
+            The V-double-buffer path uses this split point to publish V[j+1] into the
+            address-disjoint LDS slot *before* PV[j].  That gives the V ds_writes the
+            whole PV phase to retire instead of exposing their lgkmcnt drain immediately
+            before the loop barrier.  The single-buffer and final-tile paths still use
+            finish_tile() below, preserving their original ordering.
+            """
             do_mask(s, tile_idx)
 
             local_max = neg_inf
@@ -1712,6 +1740,13 @@ def _build_attention_dense_single_buffer(
                 )
                 for dt in range(D_TILES)
             ]
+            return m_new, l_new, o_acc, p_packs
+
+        def finish_tile(s, tile_idx, m_i, l_i, o_acc, vbuf):
+            """Original complete tile update used where V publication cannot move."""
+            m_new, l_new, o_acc, p_packs = _finish_tile_pre_pv(
+                s, tile_idx, m_i, l_i, o_acc
+            )
             o_acc = do_pv(o_acc, p_packs, vbuf)
             return m_new, l_new, o_acc
 
@@ -1785,24 +1820,35 @@ def _build_attention_dense_single_buffer(
                 load_k_tile(next_kbuf, next_j)
                 next_v_payload = _cfvst_load_v(next_j)
 
-                m_new, l_new, o_acc = finish_tile(
-                    s, j, m_i, l_i, o_acc, vbuf
-                )
+                if V_BUFS == 2:
+                    # Split the tile update before PV. By this point K/V[j+1] VMEM has
+                    # already overlapped the entire mask/softmax phase. Drain it here,
+                    # publish V[j+1] into the alternate LDS slot, then run PV[j] from
+                    # the current slot. The two V buffers are address-disjoint, so there
+                    # is no overwrite hazard. This gives the ds_writes the full PV phase
+                    # to retire and shortens the next-V payload live range.
+                    m_new, l_new, o_acc, p_packs = _finish_tile_pre_pv(
+                        s, j, m_i, l_i, o_acc
+                    )
+                    b.s_waitcnt(vmcnt=0)
+                    _cfvst_store_v(next_v_payload, next_vbuf)
+                    o_acc = do_pv(o_acc, p_packs, vbuf)
 
-                if V_BUFS == 1:
+                    # One rendezvous remains necessary: all current PV LDS reads and
+                    # all next-V LDS writes must be complete, and every wave must have
+                    # completed its K[next_kbuf] direct-to-LDS DMA before QK[j+1].
+                    b.sync_lds_only()
+                else:
                     # Single-buffer fallback: current PV reads must finish before any
                     # wave overwrites V_lds[0] with V[j+1].
+                    m_new, l_new, o_acc = finish_tile(
+                        s, j, m_i, l_i, o_acc, vbuf
+                    )
+                    b.sync_lds_only()
+                    b.s_waitcnt(vmcnt=0)
+                    _cfvst_store_v(next_v_payload, next_vbuf)
                     b.sync_lds_only()
 
-                # Drain this wave's prefetched K/V requests, then publish V[j+1].
-                # With V_BUFS==2 the store goes to the alternate slot, so there is no
-                # overwrite hazard with the still-retiring PV[j] reads and the first
-                # rendezvous is eliminated. This one LDS fence/barrier drains current
-                # PV reads, publishes all V[next_vbuf] ds_writes, and rendezvous after
-                # every wave's K[next_kbuf] vmcnt drain.
-                b.s_waitcnt(vmcnt=0)
-                _cfvst_store_v(next_v_payload, next_vbuf)
-                b.sync_lds_only()
                 b.scf_yield(m_new, l_new, *o_acc)
 
             # Final tile was prepared by the prologue (one-tile case) or by the last
