@@ -1715,20 +1715,385 @@ def _build_attention_dense_single_buffer(
                 qb_hi = b.sub(b.const_i32(NQB - 1 + half), blk)  # NQB-1-(blk-half)
                 qb_v = b.select(b.cmp_lt(blk, b.const_i32(half)), blk, qb_hi)
             elif spec.resolved_persist_decode == "qb_major":
-                # qb-MAJOR decode: wi = qb*(Hq*B) + hq*B + bt. Putting qb (the
-                # triangular causal-cost index) in the MSB spreads cheap+expensive
-                # query blocks across each CTA under grid-stride. Optional interleave
-                # flips on ODD `rem` (= qb0*Hq + hq, so it alternates per-hq within a
-                # qb0 row, NOT per qb0) to further balance the causal tail.
-                bt_v = b.mod(wi, b.const_i32(B))
-                rem = b.div(wi, b.const_i32(B))
-                hq_v = b.mod(rem, b.const_i32(Hq))
-                qb0 = b.div(rem, b.const_i32(Hq))
-                if spec.interleave and causal and NQB > 1:
-                    odd = b.cmp_eq(b.mod(rem, b.const_i32(2)), b.const_i32(1))
-                    qb_v = b.select(odd, b.sub(b.const_i32(NQB - 1), qb0), qb0)
+                # Generic causal-balanced QB-major scheduler with K/V locality.
+                #
+                # No exact-shape constants.
+                #
+                # B == 1:
+                #   - split physical CTAs evenly across K/V heads
+                #   - balance causal work with a capacity-aware snake
+                #   - every CTA stays on one K/V head
+                #
+                # B > 1:
+                #   - still split CTAs evenly across K/V heads
+                #   - give each CTA a contiguous segment of (batch, local-Hq)
+                #     streams as much as possible
+                #   - visit QBs high/low/high/low inside each stream
+                #
+                # This requires NP % Hkv == 0 so every K/V head owns the same
+                # number of persistent CTAs. Otherwise fall back to ordinary
+                # qb-major decoding instead of leaving qb_v/hq_v undefined.
+
+                if (
+                    causal
+                    and Hkv > 0
+                    and Hq % Hkv == 0
+                    and gqa == Hq // Hkv
+                    and NP % Hkv == 0
+                    and W == B * NQB * Hq
+                ):
+                    # ------------------------------------------------------
+                    # Per-K/V-head geometry.
+                    #
+                    # ctas_per_hkv = physical CTAs assigned to one K/V head
+                    # work_per_hkv = logical work items belonging to one K/V head
+                    #
+                    # base_jobs = base jobs/CTA
+                    # n_long = number of "long" CTAs per K/V head (base_jobs+1 jobs)
+                    # n_short = number of "short" CTAs per K/V head (base_jobs jobs)
+                    #
+                    # Since:
+                    #   W  = Hkv * work_per_hkv
+                    #   NP = Hkv * ctas_per_hkv
+                    #
+                    # we also have:
+                    #   W % NP = Hkv * n_long
+                    #
+                    # exactly matching the physical grid-stride loop's
+                    # long-CTA prefix.
+                    # ------------------------------------------------------
+
+                    ctas_per_hkv = NP // Hkv
+                    work_per_hkv = W // Hkv
+
+                    base_jobs = work_per_hkv // ctas_per_hkv
+                    n_long = work_per_hkv % ctas_per_hkv
+                    n_short = ctas_per_hkv - n_long
+
+                    total_long = Hkv * n_long
+
+                    pid = b.mod(
+                        wi,
+                        b.const_i32(NP),
+                    )
+                    round_v = b.div(
+                        wi,
+                        b.const_i32(NP),
+                    )
+
+                    # ------------------------------------------------------
+                    # Physical pid -> (hkv, local CTA slot).
+                    #
+                    # Physical pids [0, total_long) are the CTAs that execute
+                    # one extra grid-stride iteration. Arrange them as n_long
+                    # long CTAs per hkv. The rest are n_short short CTAs per hkv.
+                    # ------------------------------------------------------
+
+                    if n_long == 0:
+                        hkv_v = b.div(
+                            pid,
+                            b.const_i32(ctas_per_hkv),
+                        )
+                        slot_v = b.mod(
+                            pid,
+                            b.const_i32(ctas_per_hkv),
+                        )
+                    else:
+                        is_long = b.cmp_lt(
+                            pid,
+                            b.const_i32(total_long),
+                        )
+
+                        long_hkv = b.div(
+                            pid,
+                            b.const_i32(n_long),
+                        )
+                        long_slot = b.mod(
+                            pid,
+                            b.const_i32(n_long),
+                        )
+
+                        short_idx = b.sub(
+                            pid,
+                            b.const_i32(total_long),
+                        )
+                        short_hkv = b.div(
+                            short_idx,
+                            b.const_i32(n_short),
+                        )
+                        short_slot = b.add(
+                            b.const_i32(n_long),
+                            b.mod(
+                                short_idx,
+                                b.const_i32(n_short),
+                            ),
+                        )
+
+                        hkv_v = b.select(
+                            is_long,
+                            long_hkv,
+                            short_hkv,
+                        )
+                        slot_v = b.select(
+                            is_long,
+                            long_slot,
+                            short_slot,
+                        )
+
+                    # ======================================================
+                    # B == 1:
+                    # capacity-aware causal snake within each K/V head.
+                    #
+                    # rank 0 is the MOST expensive logical task.
+                    #
+                    # Short CTAs are placed first in the causal-cost order,
+                    # because they execute one fewer job. Long CTAs are placed
+                    # later, then receive the final partial round.
+                    #
+                    # Successive complete rounds reverse direction:
+                    #
+                    #   round 0: expensive ---> cheap
+                    #   round 1: cheap     <--- expensive
+                    #   round 2: expensive --->
+                    #
+                    # For the old:
+                    #   B=1,NQB=16,Hq=32,Hkv=8,NP=304,W=512
+                    #
+                    # this derives the same 208 two-job / 96 one-job split
+                    # and keeps the maximum causal CTA cost at 16, without
+                    # hardcoding qb1+qb13, qb7+qb7, etc.
+                    # ======================================================
+
+                    if B == 1:
+                        if n_long == 0:
+                            base_pos = slot_v
+                        else:
+                            slot_is_long = b.cmp_lt(
+                                slot_v,
+                                b.const_i32(n_long),
+                            )
+
+                            # short slots [n_long,ctas_per_hkv) -> positions [0,n_short)
+                            short_pos = b.sub(
+                                slot_v,
+                                b.const_i32(n_long),
+                            )
+
+                            # long slots [0,n_long) -> positions [n_short,ctas_per_hkv)
+                            long_pos = b.add(
+                                b.const_i32(n_short),
+                                slot_v,
+                            )
+
+                            base_pos = b.select(
+                                slot_is_long,
+                                long_pos,
+                                short_pos,
+                            )
+
+                        parity = b.mod(
+                            round_v,
+                            b.const_i32(2),
+                        )
+                        even_round = b.cmp_lt(
+                            parity,
+                            b.const_i32(1),
+                        )
+
+                        # Full-round snake over all ctas_per_hkv CTAs.
+                        rev_full_pos = b.sub(
+                            b.const_i32(ctas_per_hkv - 1),
+                            base_pos,
+                        )
+                        full_pos = b.select(
+                            even_round,
+                            base_pos,
+                            rev_full_pos,
+                        )
+                        full_rank = b.add(
+                            b.mul(
+                                round_v,
+                                b.const_i32(ctas_per_hkv),
+                            ),
+                            full_pos,
+                        )
+
+                        if n_long == 0:
+                            desc_rank = full_rank
+                        else:
+                            # Final partial round contains exactly the n_long
+                            # long CTAs (slot 0..n_long-1).
+                            is_full_round = b.cmp_lt(
+                                round_v,
+                                b.const_i32(base_jobs),
+                            )
+
+                            rev_partial_pos = b.sub(
+                                b.const_i32(n_long - 1),
+                                slot_v,
+                            )
+                            partial_pos = b.select(
+                                even_round,
+                                slot_v,
+                                rev_partial_pos,
+                            )
+                            partial_rank = b.add(
+                                b.const_i32(base_jobs * ctas_per_hkv),
+                                partial_pos,
+                            )
+
+                            desc_rank = b.select(
+                                is_full_round,
+                                full_rank,
+                                partial_rank,
+                            )
+
+                        # Per-hkv task rank:
+                        #   [qb=NQB-1 ... qb=0]
+                        qb_from_top = b.div(
+                            desc_rank,
+                            b.const_i32(gqa),
+                        )
+                        qb_v = b.sub(
+                            b.const_i32(NQB - 1),
+                            qb_from_top,
+                        )
+
+                        hql_v = b.mod(
+                            desc_rank,
+                            b.const_i32(gqa),
+                        )
+
+                        hq_v = b.add(
+                            b.mul(
+                                hkv_v,
+                                b.const_i32(gqa),
+                            ),
+                            hql_v,
+                        )
+
+                        bt_v = b.const_i32(0)
+
+                    # ======================================================
+                    # B > 1:
+                    #
+                    # K/V locality also depends on batch, so a pure global
+                    # causal snake would destroy locality. Instead, partition
+                    # each hkv's T tasks into contiguous CTA segments.
+                    #
+                    # Logical stream:
+                    #   stream_id = bt * gqa + hql
+                    #
+                    # Each stream owns NQB query blocks. Inside a stream use:
+                    #
+                    #   NQB-1, 0, NQB-2, 1, ...
+                    #
+                    # so a CTA usually remains on the same (bt,hkv,hql)
+                    # stream while still mixing high/low causal cost.
+                    # ======================================================
+
+                    else:
+                        if n_long == 0:
+                            extra_before = b.const_i32(0)
+                        else:
+                            slot_is_long = b.cmp_lt(
+                                slot_v,
+                                b.const_i32(n_long),
+                            )
+
+                            # min(slot_v, n_long)
+                            extra_before = b.select(
+                                slot_is_long,
+                                slot_v,
+                                b.const_i32(n_long),
+                            )
+
+                        # Start of this CTA's contiguous segment:
+                        #
+                        #   slot*base_jobs + min(slot,n_long)
+                        #
+                        # Then round_v walks inside that segment.
+                        stream_pos = b.add(
+                            b.add(
+                                b.mul(
+                                    slot_v,
+                                    b.const_i32(base_jobs),
+                                ),
+                                extra_before,
+                            ),
+                            round_v,
+                        )
+
+                        stream_id = b.div(
+                            stream_pos,
+                            b.const_i32(NQB),
+                        )
+                        qb_order = b.mod(
+                            stream_pos,
+                            b.const_i32(NQB),
+                        )
+
+                        bt_v = b.div(
+                            stream_id,
+                            b.const_i32(gqa),
+                        )
+                        hql_v = b.mod(
+                            stream_id,
+                            b.const_i32(gqa),
+                        )
+
+                        half = b.div(
+                            qb_order,
+                            b.const_i32(2),
+                        )
+                        odd = b.mod(
+                            qb_order,
+                            b.const_i32(2),
+                        )
+                        even_pick = b.cmp_lt(
+                            odd,
+                            b.const_i32(1),
+                        )
+
+                        qb_hi = b.sub(
+                            b.const_i32(NQB - 1),
+                            half,
+                        )
+                        qb_lo = half
+
+                        qb_v = b.select(
+                            even_pick,
+                            qb_hi,
+                            qb_lo,
+                        )
+
+                        hq_v = b.add(
+                            b.mul(
+                                hkv_v,
+                                b.const_i32(gqa),
+                            ),
+                            hql_v,
+                        )
+
                 else:
-                    qb_v = qb0
+                    # Safe generic fallback: ordinary qb-major flattening.
+                    # This guarantees qb_v/hq_v/bt_v are always defined.
+                    bt_v = b.mod(
+                        wi,
+                        b.const_i32(B),
+                    )
+                    rem = b.div(
+                        wi,
+                        b.const_i32(B),
+                    )
+                    hq_v = b.mod(
+                        rem,
+                        b.const_i32(Hq),
+                    )
+                    qb_v = b.div(
+                        rem,
+                        b.const_i32(Hq),
+                    )
             else:
                 raise ValueError(
                     "gfx942 attention_dense: persist_decode="
