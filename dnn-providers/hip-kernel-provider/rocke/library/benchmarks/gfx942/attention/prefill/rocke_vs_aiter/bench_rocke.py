@@ -41,7 +41,10 @@ req = dense_request(
     causal=True,
     dtype="bf16",
 )
+# from dataclasses import replace
 
+# spec = resolve_dense_spec(req, {})
+# spec = replace(spec, lds_row_pad=4)
 spec = resolve_dense_spec(req, {})
 ok, why = supports_attention_dense(spec, arch="gfx942")
 if not ok:

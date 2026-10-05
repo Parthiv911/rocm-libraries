@@ -41,6 +41,7 @@ cat > "$OUT/rocke_first_shape.py" <<'PY'
 #!/usr/bin/env python3
 import argparse
 import math
+from dataclasses import replace
 import torch
 from builders.gfx942.attention.prefill.attention_dense_prefill import (
     dense_request,
@@ -91,10 +92,20 @@ req = dense_request(
 # K double buffering + V-next VGPR prefetch are implementation policy
 # inside the modified gfx942 attention_dense.py.
 spec = resolve_dense_spec(req, {})
-# from dataclasses import replace
-
-# spec = resolve_dense_spec(req, {})
-# spec = replace(spec, lds_row_pad=0)
+spec = replace(
+    spec,
+    lds_row_pad=0,
+    use_k_swizzle=True,
+    use_v_double_buffer=True,
+)
+if spec.lds_row_pad != 0:
+    raise SystemExit(
+        f"ERROR: expected lds_row_pad=0, got lds_row_pad={spec.lds_row_pad}"
+    )
+if not getattr(spec, "use_k_swizzle", False):
+    raise SystemExit("ERROR: expected use_k_swizzle=True")
+if not getattr(spec, "use_v_double_buffer", False):
+    raise SystemExit("ERROR: expected use_v_double_buffer=True")
 if spec.block_n != 64:
     raise SystemExit(
         f"ERROR: expected dispatch block_n=64, got block_n={spec.block_n}"
@@ -116,14 +127,18 @@ if "_bn64_" not in name:
     raise SystemExit(
         f"ERROR: expected _bn64_ in kernel name, got: {name}"
     )
-if "_kdbvpf1" not in name:
-    raise SystemExit(
-        f"ERROR: expected _kdbvpf1 pipeline tag in kernel name, got: {name}"
-    )
+for tag in ("_krowpad0", "_kswz1", "_vdb1", "_kdbvpf1"):
+    if tag not in name:
+        raise SystemExit(
+            f"ERROR: expected {tag} in kernel name, got: {name}"
+        )
 print("ROCKE kernel:", name)
 print(f"ROCKE experiment: block_n={spec.block_n}")
+print(f"ROCKE experiment: K LDS row pad={spec.lds_row_pad}")
+print(f"ROCKE experiment: K XOR swizzle={spec.use_k_swizzle}")
+print(f"ROCKE experiment: V double buffer={spec.use_v_double_buffer}")
 print("ROCKE experiment: K LDS buffers=2")
-print("ROCKE experiment: V LDS buffers=1")
+print("ROCKE experiment: V LDS buffers=2")
 print("ROCKE experiment: V[j+1] prefetch=VGPR")
 print("ROCKE experiment: buffering policy is implemented in attention_dense.py")
 torch.manual_seed(0)
@@ -304,9 +319,9 @@ The K double-buffer/V-prefetch policy is implemented inside
 kernels/gfx942/attention_dense.py.
 There is intentionally no n_buffers spec override.
 Expected experimental kernel suffix:
-_kdbvpf1
+_krowpad0_kswz1_vdb1_kdbvpf1
 Expected BN64 LDS footprint:
-51200 bytes
+65536 bytes
 Profiling:
 The stable 10/50 benchmark is separate from rocprofv3.
 rocprofv3 runs exactly ONE target attention dispatch for AITER
@@ -331,7 +346,7 @@ grep -h \
 echo
 echo "ROCKE:"
 grep -h \
-  'rocke_attention_dense.*bn64.*kdbvpf1' \
+  'rocke_attention_dense.*bn64.*krowpad0.*kswz1.*vdb1.*kdbvpf1' \
   "$OUT/rocke"/*kernel_trace.csv \
   || true
 # ============================================================
@@ -343,13 +358,13 @@ echo "ROCKE SANITY CHECK"
 echo "============================================================"
 ROCKE_ROW="$(
     grep -h \
-      'rocke_attention_dense.*bn64.*kdbvpf1' \
+      'rocke_attention_dense.*bn64.*krowpad0.*kswz1.*vdb1.*kdbvpf1' \
       "$OUT/rocke"/*kernel_trace.csv \
       | head -n 1 \
       || true
 )"
 if [ -z "$ROCKE_ROW" ]; then
-    echo "ERROR: did not find BN64 kdbvpf1 ROCKE dispatch in trace."
+    echo "ERROR: did not find BN64 krowpad0 kswz1 vdb1 kdbvpf1 ROCKE dispatch in trace."
     exit 1
 fi
 echo "Found expected ROCKE dispatch:"
@@ -358,9 +373,15 @@ if echo "$ROCKE_ROW" | grep -q 'bn32'; then
     echo "ERROR: accidentally profiled BN32."
     exit 1
 fi
+if ! echo "$ROCKE_ROW" | grep -q ',65536,'; then
+    echo "ERROR: expected LDS/group segment 65536 bytes for K2+V2."
+    echo "Actual row:"
+    echo "$ROCKE_ROW"
+    exit 1
+fi
 echo
 echo "Expected resource signature for modified BN64 kernel:"
-echo "  LDS/group segment:       51200 bytes"
+echo "  LDS/group segment:       65536 bytes"
 echo "  private segment:         0 bytes"
 echo "  total VGPR allocation:   256"
 # ============================================================
