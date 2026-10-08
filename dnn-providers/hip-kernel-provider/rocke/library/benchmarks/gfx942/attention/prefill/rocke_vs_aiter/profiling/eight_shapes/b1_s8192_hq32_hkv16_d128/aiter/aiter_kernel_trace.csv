@@ -1,0 +1,15 @@
+"Kind","Agent_Id","Queue_Id","Stream_Id","Thread_Id","Dispatch_Id","Kernel_Id","Kernel_Name","Correlation_Id","Start_Timestamp","End_Timestamp","LDS_Block_Size","Scratch_Size","VGPR_Count","Accum_VGPR_Count","SGPR_Count","Workgroup_Size_X","Workgroup_Size_Y","Workgroup_Size_Z","Grid_Size_X","Grid_Size_Y","Grid_Size_Z"
+"KERNEL_DISPATCH","Agent 1",1,0,40543,1,9,"__amd_rocclr_copyBuffer",1,9681083051669,9681083056640,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,2,9,"__amd_rocclr_copyBuffer",2,9681084490620,9681084495271,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,3,9,"__amd_rocclr_copyBuffer",3,9681084516683,9681084519850,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,4,9,"__amd_rocclr_copyBuffer",4,9681084540947,9681084544516,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,5,9,"__amd_rocclr_copyBuffer",5,9681084568962,9681084572611,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,6,9,"__amd_rocclr_copyBuffer",6,9681084591257,9681084594745,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,7,9,"__amd_rocclr_copyBuffer",7,9681084621974,9681084626183,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,8,9,"__amd_rocclr_copyBuffer",8,9681084640227,9681084644076,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,9,9,"__amd_rocclr_copyBuffer",9,9681084662306,9681084665272,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,10,9,"__amd_rocclr_copyBuffer",10,9681084680937,9681084684064,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,11,9,"__amd_rocclr_copyBuffer",11,9681084699762,9681084703330,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,12,9,"__amd_rocclr_copyBuffer",12,9681084715820,9681084719509,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,13,9,"__amd_rocclr_copyBuffer",13,9681084735319,9681084738887,0,0,16,0,32,512,1,1,512,1,1
+"KERNEL_DISPATCH","Agent 1",1,0,40543,14,14,"aiter::fmha_fwd_hd128_bf16_causal_rtne",14,9681085592100,9681086966469,65536,0,32,224,112,512,1,1,8192,32,1

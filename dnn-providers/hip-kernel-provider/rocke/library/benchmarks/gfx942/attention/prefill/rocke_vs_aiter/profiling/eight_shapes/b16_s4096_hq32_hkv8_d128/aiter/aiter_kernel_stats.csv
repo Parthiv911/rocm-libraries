@@ -1,0 +1,3 @@
+"Name","Calls","TotalDurationNs","AverageNs","Percentage","MinNs","MaxNs","StdDev"
+"aiter::fmha_fwd_hd128_bf16_causal_rtne",1,5403836,5403836.000000,99.05,5403836,5403836,0.00000000e+00
+"__amd_rocclr_copyBuffer",13,51675,3975.000000,0.9472,3328,5733,675.921593
