@@ -1865,7 +1865,10 @@ def _build_attention_dense_single_buffer(
                         k_pack = b.smem_load_vN(
                             K_lds,
                             b.const_i32(0) if kbuf is None else kbuf,
-                            krow, col, dtype=dtype, n=4
+                            krow,
+                            col,
+                            dtype=dtype,
+                            n=4,
                         )
                     acc = mfma_32x32x8_for_dtype(b, dtype, k_pack, q_packs[ks], acc)
                 # Into the log2 domain in fp32, so masking, the row max and
@@ -2180,12 +2183,8 @@ def _build_attention_dense_single_buffer(
                 load_pipeline_k(next_kbuf, next_j)
                 # Load V next into VGPRs. The payload holds data ONLY; the
                 # address-calculation results are not loop-carried.
-                v_next = [
-                    (x0, x1) for _d0, _t0, x0, x1 in _cfvst_load_v(next_j)
-                ]
-                m_new, l_new, o_acc = finish_pipeline_tile(
-                    s, j, m_i, l_i, o_acc
-                )
+                v_next = [(x0, x1) for _d0, _t0, x0, x1 in _cfvst_load_v(next_j)]
+                m_new, l_new, o_acc = finish_pipeline_tile(s, j, m_i, l_i, o_acc)
 
                 # WAR: wait for ALL waves' current PV ds_reads before any V_lds
                 # overwrite. This is an LDS-only fence, leaving VMEM in flight.
@@ -2205,9 +2204,7 @@ def _build_attention_dense_single_buffer(
             o_acc = list(res[2 : 2 + D_TILES])
             last_kbuf = b.mod(last_j, b.const_i32(2))
             s = do_qk(last_kbuf)
-            m_i, l_i, o_acc = finish_pipeline_tile(
-                s, last_j, m_i, l_i, o_acc
-            )
+            m_i, l_i, o_acc = finish_pipeline_tile(s, last_j, m_i, l_i, o_acc)
             b.sync_lds_only()
 
         elif causal and not SW and DIAG_SPLIT:

@@ -114,7 +114,12 @@ _DENSE_ARCH: Mapping[str, _DenseTuningArch] = {
             "lds_row_pad": lambda s: int(s.head_size) == 128,
             "lds_k_group_pad": lambda s: int(s.head_size) < 128,
             "use_cfvst": lambda s: s.head_size == 128,
-            "lds_num_buffers": lambda s: (s.dtype == "bf16" and s.head_size == 128 and s.causal and s.sliding_window == 0),
+            "lds_num_buffers": lambda s: (
+                s.dtype == "bf16"
+                and s.head_size == 128
+                and s.causal
+                and s.sliding_window == 0
+            ),
             # Policy turns cfvst's swizzle on only where it is legal;
             # the knobs can only turn it off.
             "use_v_swizzle": lambda s: s.resolved_use_cfvst(),

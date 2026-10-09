@@ -887,14 +887,18 @@ def test_codegen_knob_is_bit_identical_to_default(dtype, d, persistent, override
         f"diverged from the shipped default (max_abs={max_abs:.3e})"
     )
 
+
 @requires_gfx942_gpu
 @pytest.mark.gpu
 @pytest.mark.parametrize("dtype", ["bf16", "fp16"])
 @pytest.mark.parametrize("persistent", [False, True])
-@pytest.mark.parametrize("sq,skv", [
-    (256, 64),    # n_up=1: zero-trip pipeline main loop
-    (512, 512),   # Multiple KV tiles
-])
+@pytest.mark.parametrize(
+    "sq,skv",
+    [
+        (256, 64),  # n_up=1: zero-trip pipeline main loop
+        (512, 512),  # Multiple KV tiles
+    ],
+)
 def test_cfvst_pipeline_strict_numeric(dtype, persistent, sq, skv):
     import torch
 
@@ -915,14 +919,15 @@ def test_cfvst_pipeline_strict_numeric(dtype, persistent, sq, skv):
     mask = ki <= qi
 
     ref = _sdpa_reference(
-        q, k, v, scale,
+        q,
+        k,
+        v,
+        scale,
         causal=False,
         attn_mask=mask,
     )
 
-    base = _as_gfx942_spec(
-        _spec(dtype, D, Hq, Hkv, persistent, batch=B, sq=sq)
-    )
+    base = _as_gfx942_spec(_spec(dtype, D, Hq, Hkv, persistent, batch=B, sq=sq))
 
     variants = (
         [
@@ -939,9 +944,7 @@ def test_cfvst_pipeline_strict_numeric(dtype, persistent, sq, skv):
 
         out = torch.full_like(q, float("nan"))
 
-        run_attention_dense_torch(
-            spec=spec, q=q, k=k, v=v, out=out, scale=scale
-        )
+        run_attention_dense_torch(spec=spec, q=q, k=k, v=v, out=out, scale=scale)
         torch.cuda.synchronize()
 
         assert torch.isfinite(out).all(), (
@@ -956,6 +959,7 @@ def test_cfvst_pipeline_strict_numeric(dtype, persistent, sq, skv):
             f"Sq={sq}, Skv={skv}: "
             f"max_abs={max_abs:.6g} >= {tol}"
         )
+
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
