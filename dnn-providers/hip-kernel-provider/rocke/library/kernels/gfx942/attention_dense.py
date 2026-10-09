@@ -140,6 +140,13 @@ P0 is CORRECTNESS-FIRST: the naive-V path (D64 / bf16-D128) is non-pipelined (a
 single LDS buffer) and reads V element-wise; the remaining perf levers (P2-P4) layer
 on top. It is validated against an fp32 SDPA reference across the in-scope cohort.
 
+New opt-in BF16 D128 experiment (not a change to the historical shipped policy):
+``use_cfvst=True`` enables the existing V transpose, and additionally setting
+``lds_num_buffers=2`` uses two K LDS slots plus a single V LDS slot with the
+next V tile prefetched into registers. This does not change the original
+FP16/other default execution paths. Strict on-GPU numeric and ISA validation
+is required before enabling this path by default.
+
 :func:`supports_attention_dense` is the SINGLE gate: it rejects every spec
 :func:`build_attention_dense` cannot emit -- including the modes deferred to later
 phases -- so ``supports_attention_dense(spec)[0] is True`` implies the build
@@ -204,7 +211,7 @@ from kernels.gfx942.attention_tiled_2d import _mfma_32x32_c_row, _mfma_32x32_c_c
 LOG2E = 1.4426950408889634
 _DTYPE_IR = {"bf16": BF16, "fp16": F16}
 
-# Pipeline constants (mirror gfx950; this body is NBUF=1, a single LDS buffer).
+# Pipeline constants (K-only double buffering is used for bf16 D128).
 # The shipped geometry starts at 256 query rows per CTA = 8 wave64s. ``block_m``
 # is inherited from AttentionDenseSpec, so the grid and body read the same
 # immutable value and cannot disagree silently (rows written twice/never).
@@ -339,7 +346,7 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
 
     # v_row_pad: V^T row (token axis) width pad, in elements, for the P1 conflict-free-V
     #   store. V_lds is transposed to [D, block_n+pad] so the PV A-operand read is a
-    #   contiguous ds_read_b64. On the cfvst path (fp16-D128) the pad is DERIVED from
+    #   contiguous ds_read_b64. On the cfvst path (D128) the pad is DERIVED from
     #   block_n by :func:`_v_row_pad` so the row is the smallest pow2 the XOR bank-
     #   conflict swizzle needs (:func:`_v_swizzle_width`): pad 64->0, 32->32, 128->0; 8
     #   (the original unswizzled layout) elsewhere. The pad VALUE is no longer OPEN --
@@ -352,19 +359,18 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     #   :func:`_lds_bytes` budget so the two cannot drift.
     v_row_pad: int | None = None
 
-    # use_cfvst: force the P1 conflict-free perm_b32 store-path V transpose on/off.
-    #   None (default) -> :func:`_use_cfvst`, which owns the measured verdict.
-    #   Forcing it ON where the policy says OFF is REJECTED by
-    #   supports_attention_dense (D64 regresses under it -- VGPR-bound; bf16 D128
-    #   spills past the waves-per-eu cap), so this field can only turn cfvst off, or
-    #   pin it on where it already is.
+    # use_cfvst: force the P1 conflict-free perm_b32 V transpose on/off.
+    #   None retains upstream fp16 D128 only; explicit True opts BF16 D128
+    #   into CFVST without silently changing any default BF16 kernels.
+    #   Explicit True may select other D128 modes for an A/B; D64 is rejected.
+    #   lds_num_buffers=2 explicitly enables KDB/VPF when BF16 CFVST is on.
     use_cfvst: bool | None = None
 
     # use_v_swizzle: force the V^T XOR bank-conflict swizzle on/off, INDEPENDENTLY of
     #   the pad value -- so the pad-value sweep can vary ``v_row_pad`` without silently
     #   toggling the swizzle (an explicit non-derived pad used to turn it off by making
     #   the row non-pow2). None (default) -> :func:`_use_v_swizzle` (the cfvst path).
-    #   Only the transposed-V (fp16-D128) store has a V_lds to swizzle; forcing it ON
+    #   Only the transposed-V (D128) store has a V_lds to swizzle; forcing it ON
     #   off that path, or with a pad that leaves V_LDROW non-pow2 / < 64, is REJECTED
     #   by supports_attention_dense rather than silently mis-addressing LDS.
     use_v_swizzle: bool | None = None
@@ -420,9 +426,10 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     #   ``lazy_rescale`` field has no effect here: this body always rescales, and
     #   only the shared kernel_name() reads it (the ``lazyrs`` token).
     #
-    # lds_num_buffers: K/V LDS buffers. Only 1 is implemented: the tile-start
-    #   vmcnt(0) and the trailing sync_lds_only() WAR guard assume one buffer, and
-    #   NBUF=2 only fits at block_n=32, which was measured negative.
+    # lds_num_buffers: 1 reproduces the upstream single-K-buffer implementation;
+    #   2 enables K-only double buffering plus register V prefetch (BF16 D128,
+    #   CFVST and standard causal attention only). V stays single-buffered.
+    #   At block_n=64, this variant uses 51,200 B LDS with the shipped K pad.
     lds_num_buffers: int = field(default=1, kw_only=True)
     # iglp_mode: the iglp_opt argument emitted when ``iglp`` is on (0 or 1).
     iglp_mode: int = field(default=_DEFAULT_IGLP_MODE, kw_only=True)
@@ -454,7 +461,7 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
             )
 
     def resolved_use_cfvst(self) -> bool:
-        """Resolved conflict-free-V decision (``None`` -> :func:`_use_cfvst`)."""
+        """None selects upstream FP16-D128; True explicitly enables BF16-D128."""
         if self.use_cfvst is None:
             return _use_cfvst(self.head_size, self.dtype)
         return bool(self.use_cfvst)
@@ -465,6 +472,11 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
         Read by both the builder's ``V_lds`` alloc and the :func:`_lds_bytes` budget, so
         the two cannot drift."""
         if self.v_row_pad is None:
+            # Preserve the exact upstream resolver for every pre-existing
+            # configuration, including explicit FP16 use_cfvst=False.  Only
+            # BF16 D128 opted into CFVST needs the transposed V-row pitch.
+            if self.use_cfvst is True and not _use_cfvst(self.head_size, self.dtype):
+                return _v_swizzle_width(self.block_n) - self.block_n
             return _v_row_pad(self.head_size, self.dtype, self.block_n)
         return int(self.v_row_pad)
 
@@ -476,7 +488,8 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
         if not self.resolved_use_cfvst():
             return False
         if self.use_v_swizzle is None:
-            return _use_v_swizzle(self.head_size, self.dtype)
+            # Explicit BF16 CFVST uses the same conflict-free swizzle as FP16.
+            return True
         return bool(self.use_v_swizzle)
 
     def resolved_use_exp2_fast(self) -> bool:
@@ -683,13 +696,16 @@ def _tuning_name_tags(spec: "Gfx942AttentionDenseSpec") -> str:
     :meth:`Gfx942AttentionDenseSpec.kernel_name` itself.
     """
     parts: list[str] = []
+    # NBUF=2 is an explicit spec override, so it needs a unique cache/name tag.
+    if _use_kdb_vpf(spec):
+        parts.append("kdbvpf1")
     if spec.lds_row_pad != _DEFAULT_LDS_ROW_PAD:
         parts.append(f"krowpad{spec.lds_row_pad}")
     vp = spec.resolved_v_row_pad()
-    if vp != _v_row_pad(spec.head_size, spec.dtype, spec.block_n):
+    if vp != _default_v_row_pad(spec):
         parts.append(f"vrowpad{vp}")
     cfvst = spec.resolved_use_cfvst()
-    if cfvst != _use_cfvst(spec.head_size, spec.dtype):
+    if cfvst != _default_use_cfvst(spec):
         parts.append("cfvst1" if cfvst else "cfvst0")
     swz = spec.resolved_use_v_swizzle()
     if swz != (spec.resolved_use_cfvst() and _use_cfvst(spec.head_size, spec.dtype)):
@@ -809,6 +825,29 @@ def _use_cfvst(head_size: int, dtype: str) -> bool:
     Gate on rows-per-DMA == 1 (D128) AND fp16 so the LDS budget and the body agree.
     """
     return _rows_per_instr(head_size) == 1 and dtype == "fp16"
+
+
+# A BF16 D128 opt-in overrides this historical policy at the spec resolver.
+
+
+def _default_use_cfvst(spec: "Gfx942AttentionDenseSpec") -> bool:
+    """Unmodified upstream CFVST policy, used when comparing kernel-name tags."""
+    return _use_cfvst(spec.head_size, spec.dtype)
+
+
+def _default_v_row_pad(spec: "Gfx942AttentionDenseSpec") -> int:
+    """Default upstream V-row pad, independent of manual override."""
+    return _v_row_pad(spec.head_size, spec.dtype, spec.block_n)
+
+
+def _use_kdb_vpf(spec: "Gfx942AttentionDenseSpec") -> bool:
+    """Whether the user requests K-only LDS double buffering + V prefetch.
+
+    ``supports_attention_dense`` restricts depth 2 to standard causal BF16
+    D128 with CFVST. Every other accepted spec has NBUF=1, reproducing the
+    unchanged upstream codegen. No sequence-length based policy is used.
+    """
+    return spec.lds_num_buffers == 2
 
 
 def _v_swizzle_width(block_n: int) -> int:
@@ -957,7 +996,7 @@ def _k_group_stride(spec: AttentionDenseSpec) -> int:
 
 
 def _lds_bytes(spec: "Gfx942AttentionDenseSpec") -> int:
-    """Total LDS footprint: ``K_lds[1, block_n, row_stride] + V_lds[1, D, block_n+pad]``.
+    """LDS footprint: one or two K buffers and one V buffer.
 
     K keeps the natural ``[token, dim]`` layout with :func:`_lds_row_stride` (async
     DMA target). V is TRANSPOSED to ``[dim, token]`` for the P1 conflict-free store, so
@@ -981,6 +1020,8 @@ def _lds_bytes(spec: "Gfx942AttentionDenseSpec") -> int:
         k_bytes = (spec.block_n // rpi) * _k_group_stride(spec) * 2
     else:
         k_bytes = spec.block_n * _lds_row_stride(spec) * 2
+    if _use_kdb_vpf(spec):
+        k_bytes *= 2  # K[j] and K[j+1] occupy disjoint LDS slots.
     if spec.resolved_use_cfvst():
         # V transposed to [dim, token+pad] for the conflict-free store (D128).
         v_bytes = spec.head_size * (spec.block_n + spec.resolved_v_row_pad()) * 2
@@ -1120,18 +1161,26 @@ def supports_attention_dense(
     _wpe = spec.resolved_waves_per_eu()
     if _wpe <= 0:
         return False, f"waves_per_eu must be positive, got {_wpe}"
-    # cfvst forced ON where the policy says OFF. Both cases the policy excludes are
-    # known-bad, not merely untuned: D64 (rows-per-DMA > 1) is VGPR-bound, so the
-    # register round-trip regresses it AND the transposed store no longer matches the
-    # packed async-DMA layout the naive path relies on; bf16 D128 spills past the
-    # waves-per-eu cap on the .1k schedule. Turning cfvst OFF is always legal (it is
-    # the naive path), so only the ON direction is gated. See _use_cfvst.
-    if spec.resolved_use_cfvst() and not _use_cfvst(spec.head_size, spec.dtype):
+    # The new BF16 CFVST opt-in is validated only for standard causal prefill.
+    # Preserve all existing FP16 CFVST configurations.
+    if spec.dtype == "bf16" and spec.resolved_use_cfvst():
+        if not (
+            spec.head_size == 128
+            and spec.causal
+            and spec.sliding_window == 0
+            and not spec.causal_diag_split
+        ):
+            return False, (
+                "BF16 CFVST requires D128 standard causal attention "
+                "without sliding_window or causal_diag_split"
+            )
+    # CFVST is supported for D128 (bf16 and fp16). D64 uses packed DMA rows
+    # and remains on the naive-V path; explicit CFVST there is rejected.
+    if spec.resolved_use_cfvst() and _rows_per_instr(spec.head_size) != 1:
         return False, (
             f"use_cfvst=True is rejected at D{spec.head_size}/{spec.dtype}: "
-            f"the conflict-free-V store is measured-negative there (D64 is VGPR-bound "
-            f"and regresses; bf16 D128 spills past the waves-per-eu cap), and it is "
-            f"only tile-exact on the rows-per-DMA==1 fp16 path -- see _use_cfvst"
+            f"the conflict-free-V store is supported only for rows-per-DMA==1 "
+            f"(D128); D64 uses the naive-V path -- see _use_cfvst"
         )
     # use_v_swizzle forced ON where there is no transposed-V buffer to swizzle. Only the
     # cfvst path builds V_lds[dim, token]; on the naive path the flag is a no-op, so
@@ -1140,13 +1189,22 @@ def supports_attention_dense(
         return False, (
             f"use_v_swizzle=True is rejected at D{spec.head_size}/{spec.dtype}: "
             f"the XOR bank-conflict swizzle only exists on the conflict-free-V "
-            f"(fp16-D128) path -- there is no transposed V_lds to swizzle otherwise"
+            f"(D128) path -- there is no transposed V_lds to swizzle otherwise"
         )
     # Performance-only codegen knobs: ranges, plus the one scheduling conflict.
-    if spec.lds_num_buffers != 1:
+    if spec.lds_num_buffers not in (1, 2):
+        return False, "lds_num_buffers must be 1 or 2"
+    if _use_kdb_vpf(spec) and not (
+        spec.dtype == "bf16"
+        and spec.head_size == 128
+        and spec.causal
+        and spec.resolved_use_cfvst()
+        and spec.sliding_window == 0
+        and not spec.causal_diag_split
+    ):
         return False, (
-            f"lds_num_buffers={spec.lds_num_buffers}: only 1 is implemented (the "
-            f"tile-start wait and trailing WAR barrier assume one K/V buffer)"
+            "lds_num_buffers=2 requires bf16 D128 causal CFVST "
+            "without sliding_window or causal_diag_split"
         )
     if spec.iglp_mode not in (0, 1):
         return False, f"iglp_mode must be 0 or 1, got {spec.iglp_mode}"
@@ -1263,11 +1321,11 @@ def build_attention_dense(
 ) -> KernelDef:
     """Emit the gfx942 dense flash-attention prefill kernel for ``spec``.
 
-    Delegates to :func:`_build_attention_dense_single_buffer`, the single-LDS-buffer
-    (NBUF=1) body (32x32x8 atom + K-loop doubling). NBUF=1 is the only axis that name
-    describes: the body carries the full shipped lever set (cfvst, exp2_fast, fused
-    rescale, per-config waves-per-eu, persistent grid-stride), so it is not a
-    correctness-first stand-in for a later tuned body. Every scope restriction --
+    Delegates to :func:`_build_attention_dense_single_buffer` (historical name),
+    which preserves the existing single-buffer kernel and adds the gated bf16 D128
+    K-only double-buffer / V-prefetch path. It retains CFVST, exp2_fast, fused
+    rescale, per-config waves-per-eu and persistent grid-stride. Every scope
+    restriction --
     including the modes deferred to later follow-ups -- lives in
     :func:`supports_attention_dense`, which is consulted here, so this function is a
     thin gate-plus-delegate and cannot reject a spec that ``supports`` accepted.
@@ -1319,11 +1377,13 @@ def _build_attention_dense_single_buffer(
 ) -> KernelDef:
     """gfx942 dense prefill body: 32x32x8 atom + K-loop doubling.
 
-    Non-pipelined (NBUF=1): per KV tile load→wait→QK→mask→softmax→PV, single LDS
-    buffer, simple online-softmax rescale. The per-work-item compute is factored into
+    The opt-in BF16 D128 pipeline (lds_num_buffers=2) uses two K LDS slots
+    and V register prefetch. All configurations with lds_num_buffers=1
+    retain the original single-buffer loop. Each tile computes QK then softmax/PV.
+    The per-work-item compute is factored into
     ``_run_work_item(qb, hq, bt)``, shared by the default grid (one CTA per work item)
     and the P4 persistent grid-stride path (one CTA strides over many). Perf levers
-    are all on: conflict-free V/cfvst (P1, D128 fp16), exp2_fast + fused rescale (P2),
+    are all on: conflict-free V/cfvst (P1, D128), exp2_fast + fused rescale (P2),
     per-config waves-per-eu (P3), persistent grid-stride + qb/hkv-major decode (P4).
     The transposed-QK architecture (S^T=K@Q^T so P feeds PV lane-locally) is kept
     from the gfx950 sibling — only the MFMA atom and K/V fragment widths change.
@@ -1420,7 +1480,9 @@ def _build_attention_dense_single_buffer(
     # LDS-budget check in supports_attention_dense so the two cannot drift. The one
     # exception is when _k_group_pad_active(spec): D64 K_lds then takes the padded
     # [1, block_n // rows_per_instr, _k_group_stride] 2-row-group layout below.
-    USE_CFVST = spec.resolved_use_cfvst()  # P1 conflict-free V: D128 fp16 only
+    USE_CFVST = spec.resolved_use_cfvst()  # P1 V transpose at D128.
+    USE_PIPELINE = _use_kdb_vpf(spec)  # Explicit NBUF=2; FP16 remains NBUF=1.
+    K_BUFS = 2 if USE_PIPELINE else 1
     LDROW = _lds_row_stride(spec)
     # Hypothesis #3 (D64 K-LDS bank conflicts): K_lds with a row-group boundary pad,
     # sized by the shared spec.lds_k_group_pad (0 disables it -- that is the A/B probe).
@@ -1432,7 +1494,7 @@ def _build_attention_dense_single_buffer(
             dtype, [1, BN // K_GROUP, K_GROUP_STRIDE], name_hint="Klds"
         )
     else:
-        K_lds = b.smem_alloc(dtype, [1, BN, LDROW], name_hint="Klds")
+        K_lds = b.smem_alloc(dtype, [K_BUFS, BN, LDROW], name_hint="Klds")
     if USE_CFVST:
         # V stored TRANSPOSED (P1 conflict-free V): [dim, token] with token inner and
         # padded by resolved_v_row_pad, so the PV A-operand read is a contiguous
@@ -1597,8 +1659,7 @@ def _build_attention_dense_single_buffer(
         conflicts live on the STORE (8-way -> 4-way: within a wave t0 is constant and
         d0 = 2*lane, so (d0 & mask) takes only 8 values), so further conflict work
         belongs there, not on this read.
-        naive (D64 / bf16-D128): element-wise from V_lds[key, dim] (bank-heavy, but
-        those configs are VGPR-bound / spill under cfvst, not LDS-read-bound)."""
+        naive (D64): element-wise from V_lds[key, dim]."""
         if USE_CFVST:
             dim_row = b.add(b.const_i32(dt * 32), lane_m)
             key0 = b.add(b.const_i32(kk * 8), d_base)
@@ -1673,11 +1734,20 @@ def _build_attention_dense_single_buffer(
             addr = b.add(b.add(q_base, b.mul(q_tok, _stride_q())), col)
             q_packs.append(b.global_load_vN(q, addr, dtype, 4, align=8))
 
-        def _async_load(rsrc, lds_base, tile_key0, group_pad=False):
+        def _async_load(rsrc, lds_base, tile_key0, group_pad=False, kbuf=None):
+            # Only the pipelined K path passes kbuf; the default emission is
+            # unchanged (no extra IR operations and the same LDS addresses).
+            buf_off = (
+                b.zext(b.mul(kbuf, b.const_i32(BN * LDROW * 2)), I64)
+                if kbuf is not None
+                else None
+            )
             if ROWS_PER_INSTR == 1:
                 for r in range(ROWS_PER_WAVE):
                     row = b.add(b.mul(wave, b.const_i32(ROWS_PER_WAVE)), b.const_i32(r))
                     row_lds_off = b.zext(b.mul(row, b.const_i32(K_LDROW_BYTES)), I64)
+                    if buf_off is not None:
+                        row_lds_off = b.add(buf_off, row_lds_off)
                     row_base = b.smem_ptr_add(lds_base, row_lds_off)
                     gkey = b.add(tile_key0, row)
                     gcol = b.mul(lane, b.const_i32(2))
@@ -1731,6 +1801,11 @@ def _build_attention_dense_single_buffer(
             if not USE_CFVST:
                 _async_load(v_rsrc, V_lds_addr, tk0)
 
+        def load_pipeline_k(kbuf, tile_idx):
+            """Issue K(tile_idx) DMA into the selected K LDS slot."""
+            tk0 = b.mul(tile_idx, b.const_i32(BN))
+            _async_load(k_rsrc, K_lds_addr, tk0, kbuf=kbuf)
+
         def _cfvst_load_v(tile_idx):
             """Issue the cfvst VMEM loads and keep each thread's V tile in VGPRs.
 
@@ -1762,7 +1837,7 @@ def _build_attention_dense_single_buffer(
                 payload.append((d0, t0, b.bitcast(x0, I32), b.bitcast(x1, I32)))
             return payload
 
-        def do_qk():
+        def do_qk(kbuf=None):
             """S^T = K@Q^T via the 32x32x8 atom (K-doubled)."""
             s_reg = []
             for nsub in range(N_SUB):
@@ -1780,7 +1855,7 @@ def _build_attention_dense_single_buffer(
                     if KPAD_D64:
                         k_pack = b.smem_load_vN(
                             K_lds,
-                            b.const_i32(0),
+                            b.const_i32(0) if kbuf is None else kbuf,
                             k_group,
                             b.add(k_within_off, col),
                             dtype=dtype,
@@ -1788,7 +1863,9 @@ def _build_attention_dense_single_buffer(
                         )
                     else:
                         k_pack = b.smem_load_vN(
-                            K_lds, b.const_i32(0), krow, col, dtype=dtype, n=4
+                            K_lds,
+                            b.const_i32(0) if kbuf is None else kbuf,
+                            krow, col, dtype=dtype, n=4
                         )
                     acc = mfma_32x32x8_for_dtype(b, dtype, k_pack, q_packs[ks], acc)
                 # Into the log2 domain in fp32, so masking, the row max and
@@ -2009,7 +2086,131 @@ def _build_attention_dense_single_buffer(
         # hardcoded to "tile.sync" and unroll defaults False. Pin it so a future
         # unroll=True (P3) or a sync_lds_only->sync swap cannot silently delete it.
         # Verified byte-identical codegen with and without the flag today.
-        if causal and not SW and DIAG_SPLIT:
+        if USE_PIPELINE:
+            # The original tile_body remains untouched and is used for every FP16,
+            # D64, sliding-window and diagonal-split configuration. This new BF16
+            # branch overlaps K[j+1] DMA + V[j+1] VMEM loads with softmax/PV[j].
+            def finish_pipeline_tile(s, j, m_i, l_i, o_acc):
+                # Reuse develop's FP32 score scaling, mask, exp2 policy, fused
+                # softmax/repack and optional PV scheduling knobs verbatim.
+                do_mask(s, j, lower=False, upper=True)
+                local_max = neg_inf
+                for nsub in range(N_SUB):
+                    for i in range(16):
+                        local_max = b.fmax(local_max, s[nsub][i])
+                tile_max = b.fmax(local_max, b.warp_shuffle_xor(local_max, 32))
+                m_new = b.fmax(m_i, tile_max)
+                exp2 = b.exp2_fast if spec.resolved_use_exp2_fast() else b.exp2
+                alpha = exp2(b.fsub(m_i, m_new))
+                l_local = b.const_f32(0.0)
+                p_packs = []
+                for kk in range(KK_STEPS):
+                    nsub = kk // 4
+                    base_i = (kk % 4) * 4
+                    elems = []
+                    for j2 in range(4):
+                        pv = exp2(b.fsub(s[nsub][base_i + j2], m_new))
+                        l_local = b.fadd(l_local, pv)
+                        elems.append(b.cast_f32_to(pv, dtype))
+                    p_packs.append(b.vec_pack(elems, dtype))
+                l_tile = b.fadd(l_local, b.warp_shuffle_xor(l_local, 32))
+                l_new = b.fadd(b.fmul(l_i, alpha), l_tile)
+                o_acc = [
+                    b.vec_pack(
+                        [b.fmul(b.vec_extract(o_acc[dt], i), alpha) for i in range(16)],
+                        F32,
+                    )
+                    for dt in range(D_TILES)
+                ]
+                if PV_FENCE_MASK is not None:
+                    b.sched_barrier(PV_FENCE_MASK)
+                if PV_PRIORITY:
+                    b.s_setprio(PV_PRIORITY)
+                o_acc = do_pv(o_acc, p_packs)
+                if PV_PRIORITY:
+                    b.s_setprio(0)
+                return m_new, l_new, o_acc
+
+            def publish_prefetched_v(values):
+                # Prefetch carries only packed V data across softmax/PV, not the
+                # transposition coordinates. Recompute coordinates at publication.
+                payload = []
+                for it, (x0, x1) in enumerate(values):
+                    blk = b.add(b.mul(b.const_i32(it), b.const_i32(THREADS)), tid)
+                    tg = b.div(blk, b.const_i32(V_DIM_PAIRS))
+                    dg = b.mod(blk, b.const_i32(V_DIM_PAIRS))
+                    t0 = b.mul(tg, b.const_i32(2))
+                    d0 = b.mul(dg, b.const_i32(2))
+                    payload.append((d0, t0, x0, x1))
+                _cfvst_store_v(payload)
+
+            # Prologue: prepare K[0] and publish V[0]. All waves rendezvous
+            # after draining their VMEM and after V's LDS writes complete.
+            zero = b.const_i32(0)
+            load_pipeline_k(zero, zero)
+            v0 = _cfvst_load_v(zero)
+            b.s_waitcnt(vmcnt=0)
+            _cfvst_store_v(v0)
+            b.sync_lds_only()
+
+            # Main loop deliberately excludes the final KV tile. n_up=1 makes
+            # this a zero-trip loop; its prologue and epilogue still execute.
+            last_j = b.sub(n_up, b.const_i32(1))
+            loop = b.scf_for_iter(
+                zero,
+                last_j,
+                b.const_i32(1),
+                iter_args,
+                iv_name="ktp",
+                elide_trailing_barrier=False,
+            )
+            with loop as (j, carry):
+                m_i = carry[0]
+                l_i = carry[1]
+                o_acc = list(carry[2 : 2 + D_TILES])
+                if spec.iglp:
+                    b.iglp_opt(spec.iglp_mode)
+
+                # Current tile is fully published from the prologue or prior
+                # iteration. K and Q are consumed before scheduling next K DMA.
+                kbuf = b.mod(j, b.const_i32(2))
+                s = do_qk(kbuf)
+                next_j = b.add(j, b.const_i32(1))
+                next_kbuf = b.mod(next_j, b.const_i32(2))
+                load_pipeline_k(next_kbuf, next_j)
+                # Load V next into VGPRs. The payload holds data ONLY; the
+                # address-calculation results are not loop-carried.
+                v_next = [
+                    (x0, x1) for _d0, _t0, x0, x1 in _cfvst_load_v(next_j)
+                ]
+                m_new, l_new, o_acc = finish_pipeline_tile(
+                    s, j, m_i, l_i, o_acc
+                )
+
+                # WAR: wait for ALL waves' current PV ds_reads before any V_lds
+                # overwrite. This is an LDS-only fence, leaving VMEM in flight.
+                b.sync_lds_only()
+                # Drain K[next] async-DMA and prefetched V register loads in
+                # this wave, publish V[next], then enforce cross-wave readiness.
+                b.s_waitcnt(vmcnt=0)
+                publish_prefetched_v(v_next)
+                b.sync_lds_only()
+                b.scf_yield(m_new, l_new, *o_acc)
+
+            # Epilogue: do not issue K/V loads beyond n_up-1. The last LDS
+            # barrier also protects CTA-persistent storage reuse by the next item.
+            res = loop.results
+            m_i = res[0]
+            l_i = res[1]
+            o_acc = list(res[2 : 2 + D_TILES])
+            last_kbuf = b.mod(last_j, b.const_i32(2))
+            s = do_qk(last_kbuf)
+            m_i, l_i, o_acc = finish_pipeline_tile(
+                s, last_j, m_i, l_i, o_acc
+            )
+            b.sync_lds_only()
+
+        elif causal and not SW and DIAG_SPLIT:
             # Tiles below this query block's diagonal (kt < qb*n_per) hold only keys
             # <= every query row of the block, so the causal mask is a no-op there;
             # only [qb*n_per, n_up) is masked. The single K/V buffer spans both
@@ -2051,9 +2252,10 @@ def _build_attention_dense_single_buffer(
             with loop as (j, carry):
                 tile_body(j, carry, masked=True)
 
-        res = loop.results
-        l_i = res[1]
-        o_acc = list(res[2 : 2 + D_TILES])
+        if not USE_PIPELINE:
+            res = loop.results
+            l_i = res[1]
+            o_acc = list(res[2 : 2 + D_TILES])
 
         # Epilogue: O[query,dim] = (P@V)/l, from the transposed C[dim,query] accum.
         rcp_l = b.rcp(l_i)
