@@ -201,7 +201,7 @@ def _sdpa_reference(q, k, v, scale, *, causal=True, attn_mask=None):
 def test_dense_numeric_vs_fp32_sdpa(dtype, d, hq, hkv, persistent, causal):
     import torch
 
-    tol = 2e-2 if dtype == "fp16" else 4e-2
+    tol = 2e-3 if dtype == "fp16" else 1e-2
     tdt = getattr(torch, _TORCH_DT[dtype])
     B, S = 1, 512
     scale = 1.0 / math.sqrt(d)
@@ -887,6 +887,75 @@ def test_codegen_knob_is_bit_identical_to_default(dtype, d, persistent, override
         f"diverged from the shipped default (max_abs={max_abs:.3e})"
     )
 
+@requires_gfx942_gpu
+@pytest.mark.gpu
+@pytest.mark.parametrize("dtype", ["bf16", "fp16"])
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("sq,skv", [
+    (256, 64),    # n_up=1: zero-trip pipeline main loop
+    (512, 512),   # Multiple KV tiles
+])
+def test_cfvst_pipeline_strict_numeric(dtype, persistent, sq, skv):
+    import torch
+
+    B, Hq, Hkv, D = 1, 16, 4, 128
+    tol = 1e-2 if dtype == "bf16" else 2e-3
+    dt = getattr(torch, _TORCH_DT[dtype])
+    scale = 1.0 / math.sqrt(D)
+
+    torch.manual_seed(42)
+
+    q = torch.randn(B, sq, Hq, D, device="cuda", dtype=dt)
+    k = torch.randn(B, skv, Hkv, D, device="cuda", dtype=dt)
+    v = torch.randn_like(k)
+
+    # Explicit global causal mask, including non-square Sq/Skv.
+    qi = torch.arange(sq, device="cuda")[:, None]
+    ki = torch.arange(skv, device="cuda")[None, :]
+    mask = ki <= qi
+
+    ref = _sdpa_reference(
+        q, k, v, scale,
+        causal=False,
+        attn_mask=mask,
+    )
+
+    base = _as_gfx942_spec(
+        _spec(dtype, D, Hq, Hkv, persistent, batch=B, sq=sq)
+    )
+
+    variants = (
+        [
+            {"use_cfvst": False, "lds_num_buffers": 1},
+            {"use_cfvst": True, "lds_num_buffers": 1},
+            {"use_cfvst": True, "lds_num_buffers": 2},
+        ]
+        if dtype == "bf16"
+        else [{}]  # Preserve the existing FP16 path
+    )
+
+    for knobs in variants:
+        spec = dataclasses.replace(base, seqlen_kv=skv, **knobs)
+
+        out = torch.full_like(q, float("nan"))
+
+        run_attention_dense_torch(
+            spec=spec, q=q, k=k, v=v, out=out, scale=scale
+        )
+        torch.cuda.synchronize()
+
+        assert torch.isfinite(out).all(), (
+            f"Non-finite output: {dtype}, {knobs}, "
+            f"persistent={persistent}, Sq={sq}, Skv={skv}"
+        )
+
+        max_abs = (out.float() - ref).abs().max().item()
+
+        assert max_abs < tol, (
+            f"{dtype} {knobs}, persistent={persistent}, "
+            f"Sq={sq}, Skv={skv}: "
+            f"max_abs={max_abs:.6g} >= {tol}"
+        )
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
