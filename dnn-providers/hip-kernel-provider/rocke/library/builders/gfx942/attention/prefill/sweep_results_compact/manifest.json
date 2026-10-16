@@ -1,0 +1,76 @@
+{
+  "git_sha": "b809bb81e737db8279fc1e64bc3172872643b5a7",
+  "git_status_tracked": "",
+  "hip": "7.15.26333",
+  "mode": "all",
+  "parameters": {
+    "batches": [
+      1,
+      16
+    ],
+    "dry_run": false,
+    "finalists": 10,
+    "interaction_top": 5,
+    "mode": "all",
+    "out_dir": "sweep_results_compact",
+    "ref_head_chunk": 4,
+    "ref_q_chunk": 128,
+    "round_iters": 50,
+    "round_warmup": 10,
+    "rounds": 5,
+    "screen_iters": 20,
+    "screen_repeats": 3,
+    "screen_warmup": 5,
+    "seed": 0,
+    "tol": 0.01,
+    "top_per_stage": 8
+  },
+  "script_sha256": "0cee2ed635e65ee6a32c07b2732b78dbf2e90168de5db5860bf1491a2fe455f1",
+  "search": "bounded; not exhaustive; best among A/B-tested finalists",
+  "shapes": [
+    [
+      1,
+      1024,
+      32,
+      8,
+      128
+    ],
+    [
+      1,
+      2048,
+      32,
+      8,
+      128
+    ],
+    [
+      1,
+      4096,
+      32,
+      8,
+      128
+    ],
+    [
+      16,
+      1024,
+      32,
+      8,
+      128
+    ],
+    [
+      16,
+      2048,
+      32,
+      8,
+      128
+    ],
+    [
+      16,
+      4096,
+      32,
+      8,
+      128
+    ]
+  ],
+  "tol": 0.01,
+  "torch": "2.13.0+rocm10.0.0"
+}

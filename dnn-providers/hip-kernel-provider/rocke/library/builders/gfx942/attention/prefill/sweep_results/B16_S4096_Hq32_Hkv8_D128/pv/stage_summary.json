@@ -1,0 +1,44 @@
+{
+  "best_ab_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_pvkmaj_fence0",
+    "max_ratio": 1.0582790212823359,
+    "median_ratio": 1.0575842506237267,
+    "min_ratio": 1.056699792268579,
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0
+    },
+    "ratio_spread_pct": 0.14932418035021508
+  },
+  "best_screened_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_pvkmaj_fence0",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0
+    },
+    "screen_median_ms": 6.863430023193359
+  },
+  "num_ab_attempted": 8,
+  "num_ab_failures": 0,
+  "num_ab_succeeded": 8,
+  "num_aliases": 0,
+  "num_correct_nonbaseline_not_ab_retested": 119,
+  "num_correct_screened": 128,
+  "num_legal": 128,
+  "num_rejected": 0,
+  "num_screen_exceptions": 0,
+  "num_screened": 128,
+  "num_screened_nonbaseline": 127,
+  "qualifications": {
+    "ab": "paired baseline/candidate timing, initial scaled seed",
+    "screening": "unpaired timing; relative performance unverified"
+  },
+  "stage": "pv",
+  "status": "complete"
+}

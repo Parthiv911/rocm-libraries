@@ -1,0 +1,7 @@
+correct,kernel,max_abs,overrides,screen_median_ms,screen_runs_ms
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw1,0.002429485321044922,"{""o_store_width"": 1, ""causal_diag_split"": false}",8.038272094726562,"[8.038272094726562, 8.018572998046874, 8.046781158447265]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw1_dsplit,0.002429485321044922,"{""o_store_width"": 1, ""causal_diag_split"": true}",7.719021606445312,"[7.719021606445312, 7.711658477783203, 7.722447204589844]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw2,0.002429485321044922,"{""o_store_width"": 2, ""causal_diag_split"": false}",7.648751068115234,"[7.625372314453125, 7.676509094238281, 7.648751068115234]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw2_dsplit,0.002429485321044922,"{""o_store_width"": 2, ""causal_diag_split"": true}",7.343162536621094,"[7.343162536621094, 7.3398384094238285, 7.347830200195313]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2,0.002429485321044922,"{""o_store_width"": 4, ""causal_diag_split"": false}",7.283941650390625,"[7.274000549316407, 7.283941650390625, 7.289875030517578]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit,0.002429485321044922,"{""o_store_width"": 4, ""causal_diag_split"": true}",6.948027038574219,"[6.946794128417968, 6.948027038574219, 6.9527641296386715]"

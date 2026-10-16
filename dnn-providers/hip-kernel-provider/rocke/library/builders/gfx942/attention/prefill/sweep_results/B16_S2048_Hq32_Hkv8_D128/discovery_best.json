@@ -1,0 +1,58 @@
+{
+  "best_ab_retimed_candidate": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_pvkmaj_fence0_dsplit",
+    "max_ratio": 1.0842303016064188,
+    "median_ratio": 1.081792497725562,
+    "min_ratio": 1.0807608355976022,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 1
+    },
+    "ratio_spread_pct": 0.32071455626758777,
+    "stage": "interaction"
+  },
+  "best_screened_candidate": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_pvkmaj_fence0_dsplit",
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 3
+    },
+    "screen_median_ms": 1.9006729125976562,
+    "stage": "interaction"
+  },
+  "counts": {
+    "ab_retimed": 37,
+    "numeric_pass": 291,
+    "screened": 291
+  },
+  "qualification": "screen rankings are unpaired; ratios cover only A/B-retimed finalists on initial scaled input",
+  "shape": "B16_S2048_Hq32_Hkv8_D128",
+  "stage_statuses": {
+    "geometry": "complete",
+    "interaction": "complete",
+    "ofat": "complete",
+    "output": "complete",
+    "pv": "complete"
+  },
+  "status": "complete"
+}

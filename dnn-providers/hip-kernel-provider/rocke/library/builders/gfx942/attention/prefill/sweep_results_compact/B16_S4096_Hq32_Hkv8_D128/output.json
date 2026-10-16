@@ -1,0 +1,142 @@
+{
+  "ab": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max": 1.0493359128744864,
+      "max_abs": 0.002429485321044922,
+      "min": 1.047847854574779,
+      "ratio": 1.048846137412109,
+      "screen_ms": 6.964756011962891,
+      "spread_pct": 0.14187574770299766
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 2
+      },
+      "max": 0.996338916915113,
+      "max_abs": 0.002429485321044922,
+      "min": 0.9942893258879082,
+      "ratio": 0.9959357712007428,
+      "screen_ms": 7.3047126770019535,
+      "spread_pct": 0.20579550272943167
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw2",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 2
+      },
+      "max": 0.9606834386563216,
+      "max_abs": 0.002429485321044922,
+      "min": 0.9581230721652332,
+      "ratio": 0.9585995734510226,
+      "screen_ms": 7.595515441894531,
+      "spread_pct": 0.2670944742725977
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw1_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 1
+      },
+      "max": 0.9469721173865465,
+      "max_abs": 0.002429485321044922,
+      "min": 0.9447546513787228,
+      "ratio": 0.945735684517744,
+      "screen_ms": 7.678550720214844,
+      "spread_pct": 0.23446995224193456
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw1",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 1
+      },
+      "max": 0.9115624086630981,
+      "max_abs": 0.002429485321044922,
+      "min": 0.9064462451967864,
+      "ratio": 0.9084196465563351,
+      "screen_ms": 8.013824462890625,
+      "spread_pct": 0.5631938373092465
+    }
+  ],
+  "aliases": 0,
+  "best_ab": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit",
+    "knobs": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "max": 1.0493359128744864,
+    "max_abs": 0.002429485321044922,
+    "min": 1.047847854574779,
+    "ratio": 1.048846137412109,
+    "screen_ms": 6.964756011962891,
+    "spread_pct": 0.14187574770299766
+  },
+  "best_screened": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit",
+    "knobs": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "max_abs": 0.002429485321044922,
+    "screen_ms": 6.964756011962891
+  },
+  "legal": 6,
+  "rejected": [],
+  "screened": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw1",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 1
+      },
+      "max_abs": 0.002429485321044922,
+      "screen_ms": 8.013824462890625
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw1_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 1
+      },
+      "max_abs": 0.002429485321044922,
+      "screen_ms": 7.678550720214844
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw2",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 2
+      },
+      "max_abs": 0.002429485321044922,
+      "screen_ms": 7.595515441894531
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_osw2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 2
+      },
+      "max_abs": 0.002429485321044922,
+      "screen_ms": 7.3047126770019535
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max_abs": 0.002429485321044922,
+      "screen_ms": 6.964756011962891
+    }
+  ],
+  "status": "complete"
+}

@@ -1,0 +1,142 @@
+{
+  "ab": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max": 1.0439827608972416,
+      "max_abs": 0.0013446509838104248,
+      "min": 1.0385753403491904,
+      "ratio": 1.0418059259769086,
+      "screen_ms": 0.22176334857940674,
+      "spread_pct": 0.5190429823079223
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 2
+      },
+      "max": 0.9834923902309167,
+      "max_abs": 0.0013446509838104248,
+      "min": 0.979643186633229,
+      "ratio": 0.9812865616349504,
+      "screen_ms": 0.23603179454803466,
+      "spread_pct": 0.3922609101335729
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 2
+      },
+      "max": 0.9410802002017693,
+      "max_abs": 0.0013446509838104248,
+      "min": 0.9392922418878988,
+      "ratio": 0.9400716457393036,
+      "screen_ms": 0.246305251121521,
+      "spread_pct": 0.19019383490333375
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 1
+      },
+      "max": 0.9258887186418292,
+      "max_abs": 0.0013446509838104248,
+      "min": 0.9242236642807897,
+      "ratio": 0.9248795331141942,
+      "screen_ms": 0.2498713493347168,
+      "spread_pct": 0.18002932289278933
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 1
+      },
+      "max": 0.8907433789697262,
+      "max_abs": 0.0013446509838104248,
+      "min": 0.8866316914329615,
+      "ratio": 0.8895995115545962,
+      "screen_ms": 0.2608323574066162,
+      "spread_pct": 0.462195345586403
+    }
+  ],
+  "aliases": 0,
+  "best_ab": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+    "knobs": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "max": 1.0439827608972416,
+    "max_abs": 0.0013446509838104248,
+    "min": 1.0385753403491904,
+    "ratio": 1.0418059259769086,
+    "screen_ms": 0.22176334857940674,
+    "spread_pct": 0.5190429823079223
+  },
+  "best_screened": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+    "knobs": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "max_abs": 0.0013446509838104248,
+    "screen_ms": 0.22176334857940674
+  },
+  "legal": 6,
+  "rejected": [],
+  "screened": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 1
+      },
+      "max_abs": 0.0013446509838104248,
+      "screen_ms": 0.2608323574066162
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 1
+      },
+      "max_abs": 0.0013446509838104248,
+      "screen_ms": 0.2498713493347168
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 2
+      },
+      "max_abs": 0.0013446509838104248,
+      "screen_ms": 0.246305251121521
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 2
+      },
+      "max_abs": 0.0013446509838104248,
+      "screen_ms": 0.23603179454803466
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max_abs": 0.0013446509838104248,
+      "screen_ms": 0.22176334857940674
+    }
+  ],
+  "status": "complete"
+}

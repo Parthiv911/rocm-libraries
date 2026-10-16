@@ -1,0 +1,38 @@
+{
+  "best_ab_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+    "max_ratio": 1.0339075154620703,
+    "median_ratio": 1.033659048443519,
+    "min_ratio": 1.0331792170901637,
+    "overrides": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "ratio_spread_pct": 0.07045827857872931
+  },
+  "best_screened_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+    "overrides": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "screen_median_ms": 0.11267805099487305
+  },
+  "num_ab_attempted": 5,
+  "num_ab_failures": 0,
+  "num_ab_succeeded": 5,
+  "num_aliases": 0,
+  "num_correct_nonbaseline_not_ab_retested": 0,
+  "num_correct_screened": 6,
+  "num_legal": 6,
+  "num_rejected": 0,
+  "num_screen_exceptions": 0,
+  "num_screened": 6,
+  "num_screened_nonbaseline": 5,
+  "qualifications": {
+    "ab": "paired baseline/candidate timing, initial scaled seed",
+    "screening": "unpaired timing; relative performance unverified"
+  },
+  "stage": "output",
+  "status": "complete"
+}

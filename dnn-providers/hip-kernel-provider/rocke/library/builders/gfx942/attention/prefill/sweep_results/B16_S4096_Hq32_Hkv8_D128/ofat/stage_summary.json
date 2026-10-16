@@ -1,0 +1,36 @@
+{
+  "best_ab_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit",
+    "max_ratio": 1.049342263214977,
+    "median_ratio": 1.0486762404403431,
+    "min_ratio": 1.048161795241583,
+    "overrides": {
+      "causal_diag_split": true
+    },
+    "ratio_spread_pct": 0.11256743767726747
+  },
+  "best_screened_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_dsplit",
+    "overrides": {
+      "causal_diag_split": true
+    },
+    "screen_median_ms": 6.915097045898437
+  },
+  "num_ab_attempted": 8,
+  "num_ab_failures": 0,
+  "num_ab_succeeded": 8,
+  "num_aliases": 11,
+  "num_correct_nonbaseline_not_ab_retested": 22,
+  "num_correct_screened": 31,
+  "num_legal": 31,
+  "num_rejected": 0,
+  "num_screen_exceptions": 0,
+  "num_screened": 31,
+  "num_screened_nonbaseline": 30,
+  "qualifications": {
+    "ab": "paired baseline/candidate timing, initial scaled seed",
+    "screening": "unpaired timing; relative performance unverified"
+  },
+  "stage": "ofat",
+  "status": "complete"
+}

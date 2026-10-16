@@ -1,0 +1,142 @@
+{
+  "ab": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max": 1.0317939116890504,
+      "max_abs": 0.0023569464683532715,
+      "min": 1.030924082684279,
+      "ratio": 1.0313579166690754,
+      "screen_ms": 0.11264065504074097,
+      "spread_pct": 0.08433822931041708
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 2
+      },
+      "max": 0.9150701088627081,
+      "max_abs": 0.0023569464683532715,
+      "min": 0.9142445272087512,
+      "ratio": 0.9145530412340176,
+      "screen_ms": 0.1271517515182495,
+      "spread_pct": 0.0902715989925523
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 2
+      },
+      "max": 0.8899148865714013,
+      "max_abs": 0.0023569464683532715,
+      "min": 0.8894799205142121,
+      "ratio": 0.8895766389149597,
+      "screen_ms": 0.13071579933166505,
+      "spread_pct": 0.048895849796563744
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 1
+      },
+      "max": 0.8279436496499354,
+      "max_abs": 0.0023569464683532715,
+      "min": 0.8272038782159051,
+      "ratio": 0.8273977598929786,
+      "screen_ms": 0.1404199481010437,
+      "spread_pct": 0.08940940740834778
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 1
+      },
+      "max": 0.8026107912617281,
+      "max_abs": 0.0023569464683532715,
+      "min": 0.8016741933881136,
+      "ratio": 0.8023037927876407,
+      "screen_ms": 0.14480395317077638,
+      "spread_pct": 0.11673855739360155
+    }
+  ],
+  "aliases": 0,
+  "best_ab": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+    "knobs": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "max": 1.0317939116890504,
+    "max_abs": 0.0023569464683532715,
+    "min": 1.030924082684279,
+    "ratio": 1.0313579166690754,
+    "screen_ms": 0.11264065504074097,
+    "spread_pct": 0.08433822931041708
+  },
+  "best_screened": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+    "knobs": {
+      "causal_diag_split": true,
+      "o_store_width": 4
+    },
+    "max_abs": 0.0023569464683532715,
+    "screen_ms": 0.11264065504074097
+  },
+  "legal": 6,
+  "rejected": [],
+  "screened": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 1
+      },
+      "max_abs": 0.0023569464683532715,
+      "screen_ms": 0.14480395317077638
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 1
+      },
+      "max_abs": 0.0023569464683532715,
+      "screen_ms": 0.1404199481010437
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2",
+      "knobs": {
+        "causal_diag_split": false,
+        "o_store_width": 2
+      },
+      "max_abs": 0.0023569464683532715,
+      "screen_ms": 0.13071579933166505
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 2
+      },
+      "max_abs": 0.0023569464683532715,
+      "screen_ms": 0.1271517515182495
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max_abs": 0.0023569464683532715,
+      "screen_ms": 0.11264065504074097
+    }
+  ],
+  "status": "complete"
+}

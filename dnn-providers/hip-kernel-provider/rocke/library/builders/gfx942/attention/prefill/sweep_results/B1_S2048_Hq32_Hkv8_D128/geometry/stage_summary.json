@@ -1,0 +1,44 @@
+{
+  "best_ab_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1",
+    "max_ratio": 1.12617583703181,
+    "median_ratio": 1.124875357797261,
+    "min_ratio": 1.1219259021121175,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "lds_row_pad": 4,
+      "use_exp2_fast": true,
+      "waves_per_eu": 4
+    },
+    "ratio_spread_pct": 0.37781385201776957
+  },
+  "best_screened_nonbaseline": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1",
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "lds_row_pad": 4,
+      "use_exp2_fast": true,
+      "waves_per_eu": 4
+    },
+    "screen_median_ms": 0.20580976009368895
+  },
+  "num_ab_attempted": 8,
+  "num_ab_failures": 0,
+  "num_ab_succeeded": 8,
+  "num_aliases": 48,
+  "num_correct_nonbaseline_not_ab_retested": 87,
+  "num_correct_screened": 96,
+  "num_legal": 96,
+  "num_rejected": 0,
+  "num_screen_exceptions": 0,
+  "num_screened": 96,
+  "num_screened_nonbaseline": 95,
+  "qualifications": {
+    "ab": "paired baseline/candidate timing, initial scaled seed",
+    "screening": "unpaired timing; relative performance unverified"
+  },
+  "stage": "geometry",
+  "status": "complete"
+}

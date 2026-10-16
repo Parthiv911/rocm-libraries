@@ -1,0 +1,1306 @@
+{
+  "ab": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max": 1.0067769465983962,
+      "max_abs": 0.001669168472290039,
+      "min": 1.0031949301305445,
+      "ratio": 1.0052451698155482,
+      "screen_ms": 2.065251922607422,
+      "spread_pct": 0.35633262167367435
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max": 1.0074109272225336,
+      "max_abs": 0.001669168472290039,
+      "min": 1.0031793699583633,
+      "ratio": 1.0037026203844888,
+      "screen_ms": 2.0670700073242188,
+      "spread_pct": 0.4215947212082852
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max": 1.0053231845013701,
+      "max_abs": 0.001669168472290039,
+      "min": 1.0011416056416027,
+      "ratio": 1.00417708257898,
+      "screen_ms": 2.0733604431152344,
+      "spread_pct": 0.4164184716333193
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 1.0066976400507228,
+      "max_abs": 0.001669168472290039,
+      "min": 1.0033742887299022,
+      "ratio": 1.0057660478187482,
+      "screen_ms": 2.073516845703125,
+      "spread_pct": 0.33042985772169675
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max": 1.0007475637529626,
+      "max_abs": 0.001669168472290039,
+      "min": 0.9976810587029076,
+      "ratio": 0.9986983246921292,
+      "screen_ms": 2.075555419921875,
+      "spread_pct": 0.30705018464913625
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 1.0014637473786017,
+      "max_abs": 0.001669168472290039,
+      "min": 0.9984689195446446,
+      "ratio": 1.0005462842750217,
+      "screen_ms": 2.0770267486572265,
+      "spread_pct": 0.2993192699853064
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max": 1.0030647398458217,
+      "max_abs": 0.001669168472290039,
+      "min": 0.9996942610402468,
+      "ratio": 1.0014180238127521,
+      "screen_ms": 2.083357238769531,
+      "spread_pct": 0.33657061541015965
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 0.9639945739244027,
+      "max_abs": 0.001669168472290039,
+      "min": 0.9627843043683312,
+      "ratio": 0.9632719379871283,
+      "screen_ms": 2.1584102630615236,
+      "spread_pct": 0.12564152534127704
+    }
+  ],
+  "aliases": 48,
+  "best_ab": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4",
+    "knobs": {
+      "block_m": 256,
+      "block_n": 64,
+      "lds_row_pad": 4,
+      "use_exp2_fast": null,
+      "waves_per_eu": 1
+    },
+    "max": 1.0066976400507228,
+    "max_abs": 0.001669168472290039,
+    "min": 1.0033742887299022,
+    "ratio": 1.0057660478187482,
+    "screen_ms": 2.073516845703125,
+    "spread_pct": 0.33042985772169675
+  },
+  "best_screened": {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4",
+    "knobs": {
+      "block_m": 256,
+      "block_n": 64,
+      "lds_row_pad": 4,
+      "use_exp2_fast": null,
+      "waves_per_eu": 2
+    },
+    "max_abs": 0.001669168472290039,
+    "screen_ms": 2.065251922607422
+  },
+  "legal": 96,
+  "rejected": [],
+  "screened": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.584182357788086
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.7964359283447267
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.626913642883301
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.82371826171875
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.715351104736328
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.9087318420410155
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5852428436279298
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8068798065185545
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.629776191711426
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8173755645751952
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.706833839416504
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8991941452026366
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 7.111898803710938
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 4.375171279907226
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 7.136629486083985
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 4.358415222167968
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 7.1061958312988285
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 4.388992691040039
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.583464813232422
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8032756805419923
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.634721565246582
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.824582099914551
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.7079164505004885
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.916998863220215
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.512894058227539
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.7780782699584963
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5265390396118166
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.791474723815918
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5950811386108397
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8884937286376955
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5080068588256834
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.7796016693115235
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.525645065307617
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.7870988845825195
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.596310043334961
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8907007217407226
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5118034362792967
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.782798957824707
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5244884490966797
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.796049118041992
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5938364028930665
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.8846290588378904
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.518412399291992
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.781437873840332
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5211387634277345
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.7910858154296876
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad16",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.587982940673828
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 128,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.885242462158203
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.1584102630615236
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.394313621520996
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.202785110473633
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.394454002380371
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.392499542236328
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.621573638916016
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.15850830078125
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.37415771484375
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.2073495864868162
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.4155881881713865
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3933975219726564
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.6027225494384765
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 7.59100112915039
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.9600969314575196
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe3",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 7.634944915771484
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe3_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.9690292358398436
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 7.572171783447265
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 3.033871078491211
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 16.08879699707031
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 13.183956909179688
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 16.11457977294922
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 13.157630920410156
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 16.073052978515626
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 32,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 13.182447814941407
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.073516845703125
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.2864540100097654
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.0770267486572265
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3318754196166993
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.2997703552246094
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 1
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.509299659729004
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.065251922607422
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.293796730041504
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.348545455932617
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3040761947631836
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 2
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.512457084655762
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.0733604431152344
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3167991638183594
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.075555419921875
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3197078704833984
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3021255493164063
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 3
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.516461944580078
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.0670700073242188
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3078468322753904
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.083357238769531
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 8,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.3188358306884767
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad16",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.2961200714111327
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad16_e2f0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 16,
+        "use_exp2_fast": false,
+        "waves_per_eu": 4
+      },
+      "max_abs": 0.001669168472290039,
+      "screen_ms": 2.5056713104248045
+    }
+  ],
+  "status": "complete"
+}

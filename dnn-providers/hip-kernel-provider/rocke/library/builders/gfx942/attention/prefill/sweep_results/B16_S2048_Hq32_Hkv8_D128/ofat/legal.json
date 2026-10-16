@@ -1,0 +1,929 @@
+[
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2",
+    "overrides": {},
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_pvkmaj",
+    "overrides": {
+      "pv_loop_order": "k_major"
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_pvkmaj",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_prio1",
+    "overrides": {
+      "pv_priority": 1
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_prio1",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 1,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_prio2",
+    "overrides": {
+      "pv_priority": 2
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_prio2",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 2,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_prio3",
+    "overrides": {
+      "pv_priority": 3
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_prio3",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 3,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_osw1",
+    "overrides": {
+      "o_store_width": 1
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_osw1",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 1,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_osw2",
+    "overrides": {
+      "o_store_width": 2
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_osw2",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 2,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_dsplit",
+    "overrides": {
+      "causal_diag_split": true
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_dsplit",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence0",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 0
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence0",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence1",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 1
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence1",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 1,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence2",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 2
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence2",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 2,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence4",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 4
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence4",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 4,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence8",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 8
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence8",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 8,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence10",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 16
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence10",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 16,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence20",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 32
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence20",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 32,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence40",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 64
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence40",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 64,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence80",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 128
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence80",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 128,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence100",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 256
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence100",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 256,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence200",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 512
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence200",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 512,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence400",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 1024
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence400",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 1024,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence108",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 264
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence108",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 264,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_iglp1",
+    "overrides": {
+      "iglp": true,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": null
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": true,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_iglp1",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_iglp1_iglpm1",
+    "overrides": {
+      "iglp": true,
+      "iglp_mode": 1,
+      "pv_sched_fence_mask": null
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": true,
+      "iglp_mode": 1,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_iglp1_iglpm1",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "block_m": 128
+    },
+    "resolved": {
+      "block_m": 128,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_bm128_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "hkv_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2",
+    "overrides": {
+      "block_n": 32
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 32,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn32_bf16_causal_lazyrs_persist304_gfx942_wpe2",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1",
+    "overrides": {
+      "waves_per_eu": 1
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 1
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3",
+    "overrides": {
+      "waves_per_eu": 3
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 3
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4",
+    "overrides": {
+      "waves_per_eu": 4
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 4
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4",
+    "overrides": {
+      "lds_row_pad": 4
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 4,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad16",
+    "overrides": {
+      "lds_row_pad": 16
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad16",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 16,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": true,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_e2f0",
+    "overrides": {
+      "use_exp2_fast": false
+    },
+    "resolved": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": false,
+      "iglp": false,
+      "iglp_mode": 0,
+      "interleave": false,
+      "kernel_name": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_e2f0",
+      "lds_num_buffers": 1,
+      "lds_row_pad": 8,
+      "num_persistent": 304,
+      "o_store_width": 4,
+      "persist_decode": "qb_major",
+      "persistent": true,
+      "pv_loop_order": "d_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": null,
+      "runtime_shape": true,
+      "use_cfvst": false,
+      "use_exp2_fast": false,
+      "use_v_swizzle": false,
+      "waves_per_eu": 2
+    }
+  }
+]

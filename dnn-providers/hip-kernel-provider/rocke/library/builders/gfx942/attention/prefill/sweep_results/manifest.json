@@ -1,0 +1,202 @@
+{
+  "absolute_times_private_only": true,
+  "axis_counts_raw": {
+    "geometry": 144,
+    "output": 6,
+    "pv": 128
+  },
+  "baseline_source": "resolve_dense_spec(dense_request(...), {})",
+  "batches": [
+    1,
+    16
+  ],
+  "clang_version": "UNKNOWN",
+  "date_utc": "2026-10-16T06:22:31Z",
+  "device_properties": {
+    "gcnArchName": "gfx942:sramecc+:xnack-",
+    "multi_processor_count": 304,
+    "name": "AMD Instinct MI300X VF",
+    "total_memory_bytes": 205822885888
+  },
+  "device_runtime_checked": true,
+  "excluded": {
+    "lds_k_group_pad": "D64-only",
+    "lds_num_buffers=2": "not legal for no-CFVST BF16 D128",
+    "persistent/num_persistent/persist_decode/interleave": "outside bounded review search; production baseline is retained, not altered",
+    "use_v_swizzle": "inert/rejected without CFVST",
+    "v_row_pad": "inert without CFVST (no V^T LDS layout)"
+  },
+  "final_ab": {
+    "alternating": true,
+    "iters": 50,
+    "rounds": 5,
+    "timing_api": "rocke.runtime.time_launches (no_fence)",
+    "warmup": 10
+  },
+  "geometry_axes": {
+    "block_m": [
+      128,
+      256
+    ],
+    "block_n": [
+      32,
+      64
+    ],
+    "lds_row_pad": [
+      4,
+      8,
+      16
+    ],
+    "use_exp2_fast": [
+      null,
+      false,
+      true
+    ],
+    "waves_per_eu": [
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "git_sha": "b809bb81e737db8279fc1e64bc3172872643b5a7",
+  "git_status_tracked": "",
+  "hip_version": "7.15.26333",
+  "hkv": 8,
+  "host": "Linux-6.8.0-146-generic-x86_64-with-glibc2.39",
+  "hq": 32,
+  "limit_per_stage": 0,
+  "methodology": "bounded family-wise sweep; global optimum NOT established",
+  "mode": "all",
+  "numeric_gate": {
+    "discovery": {
+      "profile": "scaled",
+      "seed": 0
+    },
+    "finalist_profiles": [
+      {
+        "profile": "scaled",
+        "seed": 0
+      },
+      {
+        "profile": "unscaled",
+        "seed": 1
+      },
+      {
+        "profile": "stress",
+        "seed": 2
+      }
+    ],
+    "max_abs_tolerance": 0.01,
+    "output_poisoning": "NaN before every numeric-gate kernel launch",
+    "reference": "chunked torch SDPA, FP32 inputs and output"
+  },
+  "output_dir": "/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/library/builders/gfx942/attention/prefill/sweep_results",
+  "pv_scheduler_states": [
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": null
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 0
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 1
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 2
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 4
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 8
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 16
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 32
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 64
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 128
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 256
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 512
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 1024
+    },
+    {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": 264
+    },
+    {
+      "iglp": true,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": null
+    },
+    {
+      "iglp": true,
+      "iglp_mode": 1,
+      "pv_sched_fence_mask": null
+    }
+  ],
+  "python": "3.12.3",
+  "screen": {
+    "discard_initial_timed_window": true,
+    "iters": 20,
+    "note": "unpaired ranking; only top_per_stage undergoes A/B",
+    "repetitions": 3,
+    "warmup": 5
+  },
+  "script_sha256": "06f3286af1b205d5d50331f778a5e1d930ec36a5edf105d6c7ad716971e5eb36",
+  "seqlens": [
+    1024,
+    2048,
+    4096
+  ],
+  "shapes": [
+    "B1_S1024_Hq32_Hkv8_D128",
+    "B1_S2048_Hq32_Hkv8_D128",
+    "B1_S4096_Hq32_Hkv8_D128",
+    "B16_S1024_Hq32_Hkv8_D128",
+    "B16_S2048_Hq32_Hkv8_D128",
+    "B16_S4096_Hq32_Hkv8_D128"
+  ],
+  "top_per_stage": 8,
+  "torch": "2.13.0+rocm10.0.0"
+}

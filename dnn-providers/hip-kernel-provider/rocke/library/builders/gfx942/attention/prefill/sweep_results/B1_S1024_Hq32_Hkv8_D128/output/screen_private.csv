@@ -1,0 +1,7 @@
+correct,kernel,max_abs,overrides,screen_median_ms,screen_runs_ms
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1,0.0023569464683532715,"{""o_store_width"": 1, ""causal_diag_split"": false}",0.14505759477615357,"[0.1450876474380493, 0.14505759477615357, 0.14495140314102173]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw1_dsplit,0.0023569464683532715,"{""o_store_width"": 1, ""causal_diag_split"": true}",0.1405553936958313,"[0.1405553936958313, 0.14034489393234253, 0.14060549736022948]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2,0.0023569464683532715,"{""o_store_width"": 2, ""causal_diag_split"": false}",0.131141996383667,"[0.131141996383667, 0.13086135387420655, 0.13142659664154052]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_osw2_dsplit,0.0023569464683532715,"{""o_store_width"": 2, ""causal_diag_split"": true}",0.12717700004577637,"[0.12892694473266603, 0.12717100381851196, 0.12717700004577637]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2,0.0023569464683532715,"{""o_store_width"": 4, ""causal_diag_split"": false}",0.11652874946594238,"[0.11650274991989136, 0.11652874946594238, 0.11654285192489625]"
+True,rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_dsplit,0.0023569464683532715,"{""o_store_width"": 4, ""causal_diag_split"": true}",0.11267805099487305,"[0.11279029846191406, 0.11261789798736573, 0.11267805099487305]"

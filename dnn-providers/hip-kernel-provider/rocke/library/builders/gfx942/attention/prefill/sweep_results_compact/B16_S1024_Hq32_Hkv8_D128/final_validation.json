@@ -1,0 +1,241 @@
+{
+  "candidates": [
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_fence0",
+      "knobs": {
+        "iglp": false,
+        "iglp_mode": 0,
+        "pv_sched_fence_mask": 0
+      },
+      "max": 1.041030942298076,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0341911419254832,
+      "ratio": 1.037085155482246,
+      "spread_pct": 0.6595215770311715
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_pvkmaj_fence0",
+      "knobs": {
+        "iglp": false,
+        "iglp_mode": 0,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0
+      },
+      "max": 1.0508403521904004,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0394749076864207,
+      "ratio": 1.0446335285623636,
+      "spread_pct": 1.0879838903525283
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_dsplit",
+      "knobs": {
+        "causal_diag_split": true,
+        "o_store_width": 4
+      },
+      "max": 1.0218415123159368,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0193402570626098,
+      "ratio": 1.0210368708084467,
+      "spread_pct": 0.2449720793477847
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "lds_row_pad": 4,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 1.0077531525360992,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 0.9996544858143124,
+      "ratio": 1.0052758951880134,
+      "spread_pct": 0.8056163248868274
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_pvkmaj_fence0_dsplit",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "causal_diag_split": true,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "o_store_width": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max": 1.0709674145770256,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0595160902480605,
+      "ratio": 1.0685213921356922,
+      "spread_pct": 1.0716981815475817
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4_pvkmaj_fence0_dsplit",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "causal_diag_split": true,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "o_store_width": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max": 1.0736254137926824,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0623467661143404,
+      "ratio": 1.0663783367705653,
+      "spread_pct": 1.0576591149158543
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_pvkmaj_fence0_dsplit",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "causal_diag_split": true,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "o_store_width": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 2.1706761778721377,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0637397603117094,
+      "ratio": 1.069249513893106,
+      "spread_pct": 103.52461265379542
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe4_krowpad4_pvkmaj_fence0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 4
+      },
+      "max": 1.0733202056400157,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.056570184206688,
+      "ratio": 1.0595944919676776,
+      "spread_pct": 1.5807954420584862
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_pvkmaj_fence0",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max": 1.063529777186023,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.059734730995522,
+      "ratio": 1.0623982097872005,
+      "spread_pct": 0.357215040042389
+    },
+    {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_pvkmaj_fence0_dsplit",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "causal_diag_split": true,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 8,
+        "o_store_width": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 3
+      },
+      "max": 1.0589820060992405,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.03443875918467,
+      "ratio": 1.0539937773479666,
+      "spread_pct": 2.32859504885557
+    }
+  ],
+  "summary": {
+    "baseline_kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2",
+    "best_nonbaseline": {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_pvkmaj_fence0_dsplit",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "causal_diag_split": true,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "o_store_width": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 2.1706761778721377,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0637397603117094,
+      "ratio": 1.069249513893106,
+      "spread_pct": 103.52461265379542
+    },
+    "best_overall": {
+      "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_pvkmaj_fence0_dsplit",
+      "knobs": {
+        "block_m": 256,
+        "block_n": 64,
+        "causal_diag_split": true,
+        "iglp": false,
+        "iglp_mode": 0,
+        "lds_row_pad": 4,
+        "o_store_width": 4,
+        "pv_loop_order": "k_major",
+        "pv_priority": 0,
+        "pv_sched_fence_mask": 0,
+        "use_exp2_fast": null,
+        "waves_per_eu": 1
+      },
+      "max": 2.1706761778721377,
+      "max_abs_scaled": 0.0020098090171813965,
+      "min": 1.0637397603117094,
+      "ratio": 1.069249513893106,
+      "spread_pct": 103.52461265379542
+    },
+    "correct_ab": 10,
+    "numeric_profiles": [
+      "scaled"
+    ],
+    "shape": "B16_S1024_Hq32_Hkv8_D128",
+    "status": "complete",
+    "tested": 10
+  }
+}

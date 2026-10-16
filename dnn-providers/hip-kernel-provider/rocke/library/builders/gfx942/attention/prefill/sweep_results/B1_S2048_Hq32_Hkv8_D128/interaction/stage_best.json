@@ -1,0 +1,225 @@
+[
+  {
+    "base_ms": [
+      0.23067546844482423,
+      0.23093366622924805,
+      0.23079654693603516,
+      0.2308302116394043,
+      0.2308013343811035
+    ],
+    "candidate_ms": [
+      0.1890176010131836,
+      0.18876501083374023,
+      0.19020910263061525,
+      0.18874977111816407,
+      0.188793888092041
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_krowpad4_e2f1_pvkmaj_prio1_fence10_dsplit",
+    "max_ratio": 1.2233923289557564,
+    "median_base_ms": 0.2308013343811035,
+    "median_candidate_ms": 0.188793888092041,
+    "median_ratio": 1.222504270204886,
+    "min_ratio": 1.2133832910417566,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 1,
+      "pv_sched_fence_mask": 16,
+      "use_exp2_fast": true,
+      "waves_per_eu": 2
+    },
+    "ratio_spread_pct": 0.818732347848765,
+    "round_ratios": [
+      1.2203914725842653,
+      1.2233923289557564,
+      1.2133832910417566,
+      1.222943001583278,
+      1.222504270204886
+    ],
+    "screen_ms": 0.1895508050918579
+  },
+  {
+    "base_ms": [
+      0.22993700027465822,
+      0.23043651580810548,
+      0.2301414680480957,
+      0.23028255462646485,
+      0.230208797454834
+    ],
+    "candidate_ms": [
+      0.18846834182739258,
+      0.18873212814331056,
+      0.18893579483032227,
+      0.18980657577514648,
+      0.1887754440307617
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe1_krowpad4_e2f1_pvkmaj_prio1_fence10_dsplit",
+    "max_ratio": 1.2209713209672886,
+    "median_base_ms": 0.230208797454834,
+    "median_candidate_ms": 0.1887754440307617,
+    "median_ratio": 1.2194848680494723,
+    "min_ratio": 1.2132485594138112,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 1,
+      "pv_sched_fence_mask": 16,
+      "use_exp2_fast": true,
+      "waves_per_eu": 1
+    },
+    "ratio_spread_pct": 0.6332806380639812,
+    "round_ratios": [
+      1.2200298365507158,
+      1.2209713209672886,
+      1.2180935235421062,
+      1.2132485594138112,
+      1.2194848680494723
+    ],
+    "screen_ms": 0.1891077995300293
+  },
+  {
+    "base_ms": [
+      0.23047662734985352,
+      0.23044212341308593,
+      0.23061773300170899,
+      0.23087831497192382,
+      0.2306899070739746
+    ],
+    "candidate_ms": [
+      0.18904003143310547,
+      0.1888347625732422,
+      0.18924692153930664,
+      0.18944818496704102,
+      0.1892244529724121
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_pvkmaj_prio1_fence10_dsplit",
+    "max_ratio": 1.2203374011906614,
+    "median_base_ms": 0.23061773300170899,
+    "median_candidate_ms": 0.1892244529724121,
+    "median_ratio": 1.2191336978398237,
+    "min_ratio": 1.218607579589133,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 1,
+      "pv_sched_fence_mask": 16,
+      "use_exp2_fast": true,
+      "waves_per_eu": 4
+    },
+    "ratio_spread_pct": 0.14188940922505217,
+    "round_ratios": [
+      1.219194821343494,
+      1.2203374011906614,
+      1.218607579589133,
+      1.2186884504176725,
+      1.2191336978398237
+    ],
+    "screen_ms": 0.1894726037979126
+  },
+  {
+    "base_ms": [
+      0.23101943969726563,
+      0.23081417083740235,
+      0.2312993049621582,
+      0.2310170364379883,
+      0.23079412460327148
+    ],
+    "candidate_ms": [
+      0.18987472534179686,
+      0.19013051986694335,
+      0.1889790916442871,
+      0.18965824127197264,
+      0.18924209594726563
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe3_krowpad4_e2f1_pvkmaj_prio1_fence10_dsplit",
+    "max_ratio": 1.2239412463550723,
+    "median_base_ms": 0.2310170364379883,
+    "median_candidate_ms": 0.18965824127197264,
+    "median_ratio": 1.2180701185914011,
+    "min_ratio": 1.2139774876696816,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 1,
+      "pv_sched_fence_mask": 16,
+      "use_exp2_fast": true,
+      "waves_per_eu": 3
+    },
+    "ratio_spread_pct": 0.8179954941274606,
+    "round_ratios": [
+      1.216694003277179,
+      1.2139774876696816,
+      1.2239412463550723,
+      1.2180701185914011,
+      1.2195707485061082
+    ],
+    "screen_ms": 0.18982739448547364
+  },
+  {
+    "base_ms": [
+      0.2310306739807129,
+      0.23166650772094727,
+      0.23103227615356445,
+      0.23122230529785157,
+      0.23063617706298828
+    ],
+    "candidate_ms": [
+      0.19591325759887696,
+      0.19576332092285156,
+      0.19642322540283202,
+      0.19604795455932617,
+      0.19603113174438477
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_gfx942_wpe2_krowpad4_e2f1_pvkmaj_prio2_fence4",
+    "max_ratio": 1.1834009896687685,
+    "median_base_ms": 0.23103227615356445,
+    "median_candidate_ms": 0.19603113174438477,
+    "median_ratio": 1.1792498211312334,
+    "min_ratio": 1.1761963264769475,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 2,
+      "pv_sched_fence_mask": 4,
+      "use_exp2_fast": true,
+      "waves_per_eu": 2
+    },
+    "ratio_spread_pct": 0.6109530875238716,
+    "round_ratios": [
+      1.1792498211312334,
+      1.1834009896687685,
+      1.1761963264769475,
+      1.179417075876103,
+      1.176528314715475
+    ],
+    "screen_ms": 0.1952196478843689
+  }
+]

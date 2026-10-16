@@ -1,0 +1,103 @@
+[
+  {
+    "block_m": 128
+  },
+  {
+    "iglp": false,
+    "iglp_mode": 0,
+    "pv_loop_order": "k_major",
+    "pv_priority": 1,
+    "pv_sched_fence_mask": 128
+  },
+  {
+    "causal_diag_split": true,
+    "o_store_width": 4
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "lds_row_pad": 4,
+    "use_exp2_fast": true,
+    "waves_per_eu": 2
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "causal_diag_split": true,
+    "iglp": false,
+    "iglp_mode": 0,
+    "lds_row_pad": 4,
+    "o_store_width": 4,
+    "pv_loop_order": "k_major",
+    "pv_priority": 1,
+    "pv_sched_fence_mask": 128,
+    "use_exp2_fast": true,
+    "waves_per_eu": 3
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "causal_diag_split": true,
+    "iglp": false,
+    "iglp_mode": 0,
+    "lds_row_pad": 4,
+    "o_store_width": 4,
+    "pv_loop_order": "k_major",
+    "pv_priority": 1,
+    "pv_sched_fence_mask": 128,
+    "use_exp2_fast": true,
+    "waves_per_eu": 2
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "causal_diag_split": true,
+    "iglp": false,
+    "iglp_mode": 0,
+    "lds_row_pad": 4,
+    "o_store_width": 4,
+    "pv_loop_order": "k_major",
+    "pv_priority": 1,
+    "pv_sched_fence_mask": 128,
+    "use_exp2_fast": true,
+    "waves_per_eu": 1
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "causal_diag_split": true,
+    "iglp": false,
+    "iglp_mode": 0,
+    "lds_row_pad": 4,
+    "o_store_width": 4,
+    "pv_loop_order": "k_major",
+    "pv_priority": 1,
+    "pv_sched_fence_mask": 128,
+    "use_exp2_fast": true,
+    "waves_per_eu": 4
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "iglp": false,
+    "iglp_mode": 0,
+    "lds_row_pad": 4,
+    "pv_loop_order": "k_major",
+    "pv_priority": 2,
+    "pv_sched_fence_mask": 8,
+    "use_exp2_fast": true,
+    "waves_per_eu": 2
+  },
+  {
+    "block_m": 128,
+    "block_n": 64,
+    "iglp": false,
+    "iglp_mode": 0,
+    "lds_row_pad": 4,
+    "pv_loop_order": "k_major",
+    "pv_priority": 1,
+    "pv_sched_fence_mask": 1024,
+    "use_exp2_fast": true,
+    "waves_per_eu": 1
+  }
+]

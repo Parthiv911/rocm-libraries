@@ -1,0 +1,81 @@
+[
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "pv_loop_order": "d_major"
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "pv_priority": 0
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "o_store_width": 4
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "causal_diag_split": false
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "iglp": false,
+      "iglp_mode": 0,
+      "pv_sched_fence_mask": null
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "block_m": 256
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "block_n": 64
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "waves_per_eu": 2
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "lds_row_pad": 8
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "use_exp2_fast": null
+    }
+  },
+  {
+    "duplicate_of": {},
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2",
+    "overrides": {
+      "use_exp2_fast": true
+    }
+  }
+]

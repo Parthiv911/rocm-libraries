@@ -1,0 +1,227 @@
+[
+  {
+    "base_ms": [
+      7.291782836914063,
+      7.297882690429687,
+      7.297598876953125,
+      7.299119262695313,
+      7.293609619140625
+    ],
+    "candidate_ms": [
+      6.724714965820312,
+      6.723980712890625,
+      6.726541137695312,
+      6.723171997070312,
+      6.728419799804687
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4_pvkmaj_fence0_dsplit",
+    "max_ratio": 1.085666001981799,
+    "median_base_ms": 7.297598876953125,
+    "median_candidate_ms": 6.724714965820312,
+    "median_ratio": 1.0848961936852841,
+    "min_ratio": 1.084000379903814,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 3
+    },
+    "ratio_spread_pct": 0.15352824423938455,
+    "round_ratios": [
+      1.0843259341066476,
+      1.0853515204823279,
+      1.0848961936852841,
+      1.085666001981799,
+      1.084000379903814
+    ],
+    "screen_ms": 6.6920021057128904
+  },
+  {
+    "base_ms": [
+      7.299971923828125,
+      7.296201782226563,
+      7.2983642578125,
+      7.2986383056640625,
+      7.306806640625
+    ],
+    "candidate_ms": [
+      6.7312689208984375,
+      6.734830932617188,
+      6.728300170898438,
+      6.728253173828125,
+      6.7304541015625
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe4_krowpad4_pvkmaj_fence0_dsplit",
+    "max_ratio": 1.0856335293823187,
+    "median_base_ms": 7.2986383056640625,
+    "median_candidate_ms": 6.7304541015625,
+    "median_ratio": 1.0847263160730745,
+    "min_ratio": 1.083353369256921,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 4
+    },
+    "ratio_spread_pct": 0.21020603000140184,
+    "round_ratios": [
+      1.0844867453094984,
+      1.083353369256921,
+      1.0847263160730745,
+      1.0847746238287597,
+      1.0856335293823187
+    ],
+    "screen_ms": 6.6935478210449215
+  },
+  {
+    "base_ms": [
+      7.2846826171875,
+      7.282053833007812,
+      7.281776733398438,
+      7.281492919921875,
+      7.2845361328125
+    ],
+    "candidate_ms": [
+      6.71488037109375,
+      6.712327270507813,
+      6.719784545898437,
+      6.712772827148438,
+      6.716640014648437
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2_krowpad4_pvkmaj_fence0_dsplit",
+    "max_ratio": 1.084877649664555,
+    "median_base_ms": 7.282053833007812,
+    "median_candidate_ms": 6.71488037109375,
+    "median_ratio": 1.084722082426708,
+    "min_ratio": 1.0836324711992475,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 2
+    },
+    "ratio_spread_pct": 0.11479239571869738,
+    "round_ratios": [
+      1.0848566489057105,
+      1.084877649664555,
+      1.0836324711992475,
+      1.084722082426708,
+      1.0845506260459885
+    ],
+    "screen_ms": 6.683468627929687
+  },
+  {
+    "base_ms": [
+      7.290879516601563,
+      7.289049682617187,
+      7.29149658203125,
+      7.289371948242188,
+      7.29207763671875
+    ],
+    "candidate_ms": [
+      6.719177856445312,
+      6.72404296875,
+      6.723247680664063,
+      6.730303955078125,
+      6.728350830078125
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4_pvkmaj_fence0_dsplit",
+    "max_ratio": 1.0850850613528336,
+    "median_base_ms": 7.290879516601563,
+    "median_candidate_ms": 6.72404296875,
+    "median_ratio": 1.084027826189252,
+    "min_ratio": 1.0830672725772268,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 4,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 1
+    },
+    "ratio_spread_pct": 0.18613809782909538,
+    "round_ratios": [
+      1.0850850613528336,
+      1.084027826189252,
+      1.084520001100281,
+      1.0830672725772268,
+      1.0837838009457779
+    ],
+    "screen_ms": 6.690541076660156
+  },
+  {
+    "base_ms": [
+      7.302548217773437,
+      7.301988525390625,
+      7.305537719726562,
+      7.298870849609375,
+      7.301472778320313
+    ],
+    "candidate_ms": [
+      6.753826904296875,
+      6.751310424804688,
+      6.7524566650390625,
+      6.750814208984375,
+      6.754099731445312
+    ],
+    "kernel": "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_pvkmaj_fence0_dsplit",
+    "max_ratio": 1.0819081235354067,
+    "median_base_ms": 7.301988525390625,
+    "median_candidate_ms": 6.7524566650390625,
+    "median_ratio": 1.0812459841290067,
+    "min_ratio": 1.081043080297819,
+    "overrides": {
+      "block_m": 256,
+      "block_n": 64,
+      "causal_diag_split": true,
+      "iglp": false,
+      "iglp_mode": 0,
+      "lds_row_pad": 8,
+      "o_store_width": 4,
+      "pv_loop_order": "k_major",
+      "pv_priority": 0,
+      "pv_sched_fence_mask": 0,
+      "use_exp2_fast": null,
+      "waves_per_eu": 1
+    },
+    "ratio_spread_pct": 0.08000429599601779,
+    "round_ratios": [
+      1.0812459841290067,
+      1.0815661058277983,
+      1.0819081235354067,
+      1.081183783712432,
+      1.081043080297819
+    ],
+    "screen_ms": 6.7140861511230465
+  }
+]
