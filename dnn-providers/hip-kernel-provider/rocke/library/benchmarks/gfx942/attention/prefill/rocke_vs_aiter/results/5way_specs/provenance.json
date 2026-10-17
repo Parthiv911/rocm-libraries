@@ -1,0 +1,162 @@
+{
+  "timestamp_utc": "2026-10-17T05:32:09.580418+00:00",
+  "gpu": {
+    "name": "AMD Instinct MI300X VF",
+    "architecture": "gfx942:sramecc+:xnack-",
+    "cu_count_reported_by_torch": 304,
+    "total_memory_bytes": 205822885888
+  },
+  "software": {
+    "python_version": "3.12.3",
+    "python_executable": "/root/gpu-bench/venvs/rocke/bin/python",
+    "pytorch": "2.13.0+rocm10.0.0",
+    "pytorch_hip": "7.15.26333",
+    "pytorch_git_version": "6596a0dea537c1c78520c73cc6678214781a9d06",
+    "triton": "3.8.0+git4cff872c.rocm10.0.0",
+    "rocm_sdk_core": null,
+    "clang_version_on_path_NOT_necessarily_comgr": null,
+    "hipcc_version_on_path_if_available": "HIP version: 7.15.26333-0000000\nAMD clang version 23.0.0git (https://github.com/ROCm/llvm-project.git 8f497e0992fb7513f7f78a6f6b6f1056c375e961)\nTarget: x86_64-unknown-linux-gnu\nThread model: posix\nInstalledDir: /root/gpu-bench/venvs/rocke/lib/python3.12/site-packages/_rocm_sdk_devel/lib/llvm/bin"
+  },
+  "compile_backend": "python",
+  "compiler_flavor_requested": "llvm23",
+  "environment_variables": {
+    "ROCKE_ROOT": "/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke",
+    "ROCKE_BACKEND": "python",
+    "ROCKE_LLVM_FLAVOR": "llvm23",
+    "ROCKE_COMGR_LIB": "/root/gpu-bench/venvs/rocke/lib/python3.12/site-packages/_rocm_sdk_core/lib/libamd_comgr.so.3",
+    "ROCKE_HIP_LIB": "/root/gpu-bench/venvs/rocke/lib/python3.12/site-packages/_rocm_sdk_core/lib/libamdhip64.so.7",
+    "PYTHONPATH": "/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/library:/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/platform/Python:/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke",
+    "LD_LIBRARY_PATH": "/root/gpu-bench/venvs/rocke/lib/python3.12/site-packages/_rocm_sdk_core/lib"
+  },
+  "git": {
+    "repository_root": "/root/gpu-bench/rocm-libraries",
+    "head_sha": "8dec2cd5ce81d6a05fbecf5cc84952daf386f02a",
+    "branch": "users/Parthiv911/rocke/gfx942-dense-cfvst-kdb-vpf-fix2",
+    "working_tree_dirty": true,
+    "tracked_files_dirty": true,
+    "untracked_entry_count": 1,
+    "changed_or_untracked_paths_count": 2,
+    "note": "If working_tree_dirty, the HEAD SHA alone does not reproduce this run; use the recorded source hashes and preserve the changes."
+  },
+  "source_files": {
+    "attention_dense.py": "/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/library/kernels/gfx942/attention_dense.py",
+    "attention_dense_sha256": "ab70315fe84d058a4ee2a497aadfa804ff845a41e40c69f1a522bd1bd4f446c2",
+    "benchmark_script": "/root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/library/benchmarks/gfx942/attention/prefill/rocke_vs_aiter/bench_rocke_5way_specs.py",
+    "benchmark_script_sha256": "eeca67b56c2396357784a3b61d49eb951e64203de41391e104d4611ca4736fa5"
+  },
+  "run": {
+    "shapes": [
+      {
+        "batch": 1,
+        "seqlen": 1024,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 1024,
+        "hq": 32,
+        "hkv": 16,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 2048,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 2048,
+        "hq": 32,
+        "hkv": 16,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 4096,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 4096,
+        "hq": 32,
+        "hkv": 16,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 8192,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 8192,
+        "hq": 32,
+        "hkv": 16,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 1,
+        "seqlen": 16384,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 16,
+        "seqlen": 4096,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 16,
+        "seqlen": 4096,
+        "hq": 32,
+        "hkv": 16,
+        "d": 128,
+        "dtype": "bf16"
+      },
+      {
+        "batch": 16,
+        "seqlen": 8192,
+        "hq": 32,
+        "hkv": 8,
+        "d": 128,
+        "dtype": "bf16"
+      }
+    ],
+    "variant_count": 5,
+    "correctness_atol": 0.01,
+    "correctness_rtol": 0.01,
+    "reference": "chunked independent FP32 causal GQA SDPA",
+    "input_dtype": "bf16",
+    "warmup_per_arm": 10,
+    "rounds": 5,
+    "launches_per_round_per_arm": 50,
+    "randomization_seed": 942,
+    "input_seed": 0,
+    "current_stream_handle": 0,
+    "all_validation_passed": true,
+    "dispatch_baseline_for_all_shapes": true,
+    "diagnostic_shape_labels": [],
+    "exact_python_command": "/root/gpu-bench/venvs/rocke/bin/python /root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/library/benchmarks/gfx942/attention/prefill/rocke_vs_aiter/bench_rocke_5way_specs.py --rocke-root /root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke --out-dir /root/gpu-bench/rocm-libraries/dnn-providers/hip-kernel-provider/rocke/library/benchmarks/gfx942/attention/prefill/rocke_vs_aiter/results/5way_specs --warmup 10 --rounds 5 --repeat 50"
+  }
+}
