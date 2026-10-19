@@ -2,7 +2,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-ROOT = Path("sweep_results")
+ROOT = Path("sweep_results_12_shapes")
 README = Path("README.md")
 
 START = "<!-- BEGIN MEASURED CONFIGURATIONS -->"

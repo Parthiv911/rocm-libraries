@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Staged gfx942 BF16 D128 causal prefill baseline lever sweep (12 knobs).
 
-Six default shapes: B=(1,16), S=(1024,2048,4096), Hq/Hkv=32/8.
+Twelve explicit measured shapes: B in (1,16), S in (1024,2048,4096,8192,16384),
+Hq=32, Hkv in (8,16) where listed in the benchmark cohort.
+The default run sweeps all 12, not the Cartesian product of these dimensions.
 Base spec is production dispatch-resolved gfx942_dense for each shape.  The
 search NEVER overrides CFVST, K-LDS buffer count, V-register prefetch, V
 swizzle, V-row padding, or persistent-grid scheduling.  It requires the
@@ -52,9 +54,23 @@ import statistics
 import subprocess
 import sys
 
-ARCH, H_Q, H_KV, D, DTYPE = "gfx942", 32, 8, 128, "bf16"
-SEQS = (1024, 2048, 4096)
-BOUNDED_SHAPES = tuple((b, s, H_Q, H_KV, D) for b in (1, 16) for s in SEQS)
+ARCH, H_Q, D, DTYPE = "gfx942", 32, 128, "bf16"
+# Exact 12 shapes from the baseline-vs-new performance table.
+# Explicit listing prevents sweeping nonexistent combinations.
+COHORT_SHAPES = (
+    (1, 1024, H_Q, 8, D),
+    (1, 1024, H_Q, 16, D),
+    (1, 2048, H_Q, 8, D),
+    (1, 2048, H_Q, 16, D),
+    (1, 4096, H_Q, 8, D),
+    (1, 4096, H_Q, 16, D),
+    (1, 8192, H_Q, 8, D),
+    (1, 8192, H_Q, 16, D),
+    (1, 16384, H_Q, 8, D),
+    (16, 4096, H_Q, 8, D),
+    (16, 4096, H_Q, 16, D),
+    (16, 8192, H_Q, 8, D),
+)
 FENCES = (0,) + tuple(1 << i for i in range(11)) + (0x108,)
 # Focused baseline sweep: broaden only if a follow-up study warrants it.
 # BN=128 (pad=0 only) is intentionally out of the default search.
@@ -586,7 +602,7 @@ def parse_args():
     p.add_argument("--resume", action="store_true",
                    help="Reuse fully completed per-shape results with matching script, kernel, and stack")
     p.add_argument("--batches", default="1,16",
-                   help="Batch counts; S is fixed to 1024,2048,4096")
+                   help="Filter the fixed 12-shape cohort by batch (1 or 16); defaults to both")
     p.add_argument("--tol", type=float, default=1e-2)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--screen-warmup", type=int, default=5)
@@ -623,7 +639,7 @@ def parse_args():
                 "b2_beam", "d_beam", "refine_seeds", "finalists", "ref_q_chunk",
                 "ref_head_chunk", "screen_iters", "round_iters", "screen_warmup",
                 "round_warmup", "screen_repeats")
-    if (not args.batches or any(b < 1 for b in args.batches)
+    if (not args.batches or any(b not in {1, 16} for b in args.batches)
             or args.rounds < 3 or args.refine_passes not in (0, 1, 2)
             or any(getattr(args, k) < 1 for k in positive)
             or args.tol <= 0):
@@ -890,7 +906,10 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     # Do not accidentally add raw performance results or private stack info to Git.
     (out / ".gitignore").write_text("*\n!.gitignore\n")
-    shapes = tuple((b, s, H_Q, H_KV, D) for b in args.batches for s in SEQS)
+    shapes = tuple(shape for shape in COHORT_SHAPES if shape[0] in args.batches)
+    print(f"Selected {len(shapes)} of {len(COHORT_SHAPES)} cohort shapes:", flush=True)
+    for b, s, hq, hkv, d in shapes:
+        print(f"  B={b} S={s} Hq={hq} Hkv={hkv} D={d} dtype={DTYPE}", flush=True)
     env = capture_environment(root, torch, dense, args, shapes)
     if args.resume:
         _checked_resume_provenance(out, env)
