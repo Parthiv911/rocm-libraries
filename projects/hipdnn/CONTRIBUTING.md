@@ -41,7 +41,7 @@ Before contributing, please review these essential documents to understand the p
 - **[Design](./docs/Design.md)** - Understand hipDNN's architecture and component design
 - **[Building](./docs/Building.md)** - Learn how to build hipDNN on your system
 - **[How-To](./docs/HowTo.md)** - Using hipDNN components and common approaches for extending functionality
-- **[TestingStrategy](./docs/testing/TestingStrategy.md)** - Understand our testing approach and requirements
+- **[Testing Strategy](./docs/testing/TESTING_STRATEGY.md)** - Understand our testing approach and requirements
 - **[Roadmap](./docs/Roadmap.md)** - Check planned features and find contribution opportunities
 - **[Coding Style and Naming Guidelines](./docs/CodingStyleAndNamingGuidelines.md)** - Follow our coding conventions for consistency
 
@@ -55,7 +55,8 @@ All contributions must meet the following requirements before they can be merged
 
 - **RFC Process**: For large or complex feature changes, contributors must provide a Request for Comments (RFC) proposal ahead of development.
   - This proposal should be discussed and iterated upon with maintainers prior to beginning feature work and implementation.
-  - RFCs should be submitted as a Markdown document added to `hipdnn/docs/rfcs` via a Pull Request (e.g., see [PR #3266](https://github.com/ROCm/rocm-libraries/pull/3266)).
+  - RFCs should be submitted as a Markdown document added to `projects/hipdnn/docs/rfcs` via a Pull Request (e.g., see [PR #3266](https://github.com/ROCm/rocm-libraries/pull/3266)).
+  - Every RFC carries a `Status` (`Planned`, `In progress`, `Implemented`, or `Rejected / Replaced`). Follow the header format in the [RFC index](./docs/rfcs/README.md), and update the status in the PR that changes the implementation state.
 - **Phased Implementation**: We strongly encourage landing changes in multiple phases.
 - **Small PRs**: Please keep Pull Requests small and focused.
   - This makes reviews easier to digest.
@@ -95,7 +96,7 @@ All contributions may be subject to automated security scanning.
   - New code should not decrease existing coverage
   - Each component should maintain >80% coverage individually
 
-See [Testing](./docs/Testing.md) for further details.
+See [Testing](./docs/TESTING.md) for further details.
 
 ### Documentation Requirements
 
