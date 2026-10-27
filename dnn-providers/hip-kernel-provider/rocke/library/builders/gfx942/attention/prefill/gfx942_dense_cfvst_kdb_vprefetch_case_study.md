@@ -460,3 +460,52 @@ export PYTHONPATH="$PWD/platform/python:$PWD/library:$PWD"
 ```
 
 Results are written to `gpu-bench/` by default.
+
+### Global-Memory Coalescing and ISA Verification (§R.5)
+
+The CFVST, K LDS double-buffering (KDB), and V register-prefetching (VPF) optimizations change K/V load scheduling and LDS layout. We verified that the affected global-memory accesses remain coalesced using `vector_transactions`, `addr_fn_from_strides`, and `analyze_coalescing(..., line_bytes=line_bytes_for("gfx942"))`. Emitted load widths were checked using `assert_asm_backed`.
+
+**Configuration:** MI300X (`gfx942`, 304 CUs), BF16 causal prefill, B=1, S=4096, Hq=32, Hkv=8, D=128, BM=256, BN=64, persistent-304, CFVST+KDB+VPF enabled.
+
+#### Coalescing results
+
+| Global access | Modeled positions | Fully coalesced | Lines/instruction | Footprint | Ideal / emitted width |
+|---|---:|---|---:|---:|---|
+| K async → LDS | 64 | Yes | 2 | 1.0× | 2 BF16 / 32-bit |
+| V CFVST x0 | 32 | Yes | 2 | 1.0× | 2 BF16 / 32-bit |
+| V CFVST x1 | 32 | Yes | 2 | 1.0× | 2 BF16 / 32-bit |
+
+**`CoalescingReport.summary()`** (same for all three):
+
+`load [token stride 1024, head_dim stride 1]: contiguous axis = head_dim; 1 instr, VW=2 elems (b128-ideal), lines/instr 2..2 (128B lines), footprint 1x, FULLY COALESCED`
+
+Each wave-wide load transfers 64 × 4 = 256 bytes across exactly two 128-byte cache lines. All modeled positions are fully coalesced with no excess cache-line footprint.
+
+#### Assembly verification
+
+| Access | ISA PC | Instruction |
+|---|---|---|
+| K → LDS | `0x3B60` | `buffer_load_dword ... lds` |
+| V x0 | `0x3BB8` | `buffer_load_dword v3, v1, s[28:31], 0 offen` |
+| V x1 | `0x3BC0` | `buffer_load_dword v4, v2, s[28:31], 0 offen` |
+
+All three emitted loads are 32-bit, matching the predicted two BF16 elements per lane. **All assembly-backed width checks passed.**
+
+ISA address analysis also verified the first V x0/x1 pair:
+
+- `s9 = Hkv = 8`
+- `s24 = s9 << 7 = 1024` BF16 elements
+- The two V offsets differ by `s24`, corresponding to **2048 bytes**, exactly one KV token stride.
+
+#### Provenance
+
+| Field | Value |
+|---|---|
+| Verification commit | `4f5491069dfda53238977f64e8163165f459af36` |
+| HSACO SHA-256 | `e3d2f9feda7b5da03b2e1dd5a70129fa872160644faca4f442c5b974ddb1facc` |
+| Disassembler | AMD LLVM `24.0.0git` |
+| LLVM Flavor | llvm23 |
+
+The two revisions have no identified active K/V load implementation changes, although binary equivalence has not been established. The recorded LLVM version identifies the disassembler, not necessarily the compilation flavor.
+
+**Conclusion:** K and V global loads remain fully coalesced, with a 1.0× cache-line footprint and emitted widths matching static predictions. No global-memory coalescing regression was identified for the verified CFVST+KDB+VPF configuration.
