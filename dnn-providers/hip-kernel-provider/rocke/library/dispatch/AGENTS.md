@@ -166,10 +166,13 @@ template and its DS-read count, each on its own axis), exp2 and PV-loop
 codegen, the tile (`block_m` 128/256, `block_n` 32/64/128; `ragged` follows
 it), the O store width, `num_persistent` (symbolic policies such as
 `gqa_pair` and CU multiples, resolved per problem and per `block_m`),
-`persist_decode`, and `interleave`. `production` sets every applicable knob
-to each legal value one at a time from the default spec, pairing a value with
-its prerequisite when it is illegal alone, and repeats that pass at each
-`block_m` (the query tile changes what every other knob does); `full` walks
+`persist_decode`, `interleave`, and `nonpersist_decode` (the grid body's
+block order; both decode axes take their values from the decode registries in
+`kernels/common/attention_dense_decode.py`). `production` sets every
+applicable knob to each legal value one at a time from the default spec,
+pairing a value with its prerequisite when it is illegal alone, and repeats
+that pass at each `block_m` (the query tile changes what every other knob
+does); `full` walks
 or samples the pruned product. The kernel's
 spec validator is the only legality gate. An explicit value equal to its
 policy, or a knob the body does not read for that spec, re-emits the same IR
@@ -183,12 +186,13 @@ gfx942 dense uses the same walk over `_GFX942_DENSE_AXES`
 knob there alongside `block_m` and `block_n`, and the persistent-only knobs
 are pruned per spec. Its knobs include the K and V row pads, the D64 K group
 pad, conflict-free V store (`use_cfvst`) and its swizzle, K LDS buffering
-(`lds_num_buffers`), V register prefetch (`v_reg_prefetch`), exp2,
-`iglp` / `iglp_mode`, the PV fence mask, `pv_priority`, `pv_loop_order`,
-the bf16 O store width, and `causal_diag_split`. LDS-saving and
-prerequisite axes lead as enablers so an otherwise invalid configuration can
-become valid before later knobs are considered. Only `lazy_rescale` is
-untunable on gfx942, because the kernel body does not read it.
+(`lds_num_buffers`), V register prefetch (`v_reg_prefetch`), the persistent
+and non-persistent block orders, exp2, `iglp` / `iglp_mode`, the PV fence
+mask, `pv_priority`, `pv_loop_order`, the bf16 O store width, and
+`causal_diag_split`. LDS-saving and prerequisite axes lead as enablers so
+an otherwise invalid configuration can become valid before later knobs
+are considered. Only `lazy_rescale` is untunable on gfx942, because the
+kernel body does not read it.
 
 The three performance levers are **independent opt-ins** for supported
 BF16 D128 standard causal attention (`sliding_window=0`, no sinks or
@@ -208,6 +212,7 @@ pin or the full tuning space. The BF16 D128 default remains
 default or make the opt-in dense candidate an automatic dispatch winner.
 Bare `tuning_id` replay searches production points only; replay a
 full-space-only combination with its recorded knob dictionary.
+
 `registered_attention_combos(req)` is the multi-engine bench
 entry: it probes `ATTENTION_EXECUTION_REGISTRY` for `req.arch` and flattens each
 candidate's `sweep_space` (dense, WMMA, and unified tuning). Routing-only
