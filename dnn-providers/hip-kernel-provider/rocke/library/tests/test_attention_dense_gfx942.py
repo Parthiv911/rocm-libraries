@@ -1114,15 +1114,36 @@ def test_cfvst_kdb_vpf_lds_budgets(overrides, expected_bytes):
 
 
 @pytest.mark.parametrize(
-    "overrides",
+    "overrides, expected_message",
     [
-        {"use_cfvst": "false"},  # truthy: would silently build the CFVST kernel
-        {"use_cfvst": 1},
-        {"lds_num_buffers": 2.0},
-        {"lds_num_buffers": True},
-        {"v_reg_prefetch": "false"},
-        {"v_reg_prefetch": 1},
-        {"v_reg_prefetch": None},
+        (
+            {"use_cfvst": "false"},
+            "use_cfvst must be None or a bool, got str",
+        ),
+        (
+            {"use_cfvst": 1},
+            "use_cfvst must be None or a bool, got int",
+        ),
+        (
+            {"lds_num_buffers": 2.0},
+            "lds_num_buffers must be an int, got float",
+        ),
+        (
+            {"lds_num_buffers": True},
+            "lds_num_buffers must be an int, got bool",
+        ),
+        (
+            {"v_reg_prefetch": "false"},
+            "v_reg_prefetch must be a bool, got str",
+        ),
+        (
+            {"v_reg_prefetch": 1},
+            "v_reg_prefetch must be a bool, got int",
+        ),
+        (
+            {"v_reg_prefetch": None},
+            "v_reg_prefetch must be a bool, got NoneType",
+        ),
     ],
     ids=[
         "cfvst-str",
@@ -1134,11 +1155,15 @@ def test_cfvst_kdb_vpf_lds_budgets(overrides, expected_bytes):
         "vpf-none",
     ],
 )
-def test_cfvst_kdb_vpf_knobs_reject_non_exact_types(overrides):
-    """The spec rejects a knob of the wrong type instead of coercing it into a
-    different valid kernel (``bool("false")`` is True)."""
-    with pytest.raises(ValueError, match="must be"):
+def test_cfvst_kdb_vpf_knobs_reject_non_exact_types(
+    overrides, expected_message
+):
+    """Invalid knob types must raise parameter-specific ValueErrors."""
+    with pytest.raises(ValueError) as exc_info:
         _spec(**overrides)
+
+    assert type(exc_info.value) is ValueError
+    assert str(exc_info.value) == expected_message
 
 
 def test_cfvst_kdb_vpf_rejects_over_budget_lds():

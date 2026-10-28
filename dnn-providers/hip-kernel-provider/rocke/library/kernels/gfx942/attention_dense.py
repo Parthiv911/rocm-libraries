@@ -142,9 +142,10 @@ P0 is CORRECTNESS-FIRST: the naive-V path (D64 / bf16-D128) is non-pipelined (a
 single LDS buffer) and reads V element-wise; the remaining perf levers (P2-P4) layer
 on top. It is validated against an fp32 SDPA reference across the in-scope cohort.
 
-Opt-in bf16 D128: ``use_cfvst=True`` enables the V transpose for standard
-causal attention. ``lds_num_buffers=2`` independently uses two K LDS slots;
-``v_reg_prefetch=True`` independently loads next-tile V data into registers
+Opt-in bf16 D128: ``use_cfvst=True`` enables the V transpose for
+causal attention, including ``causal_diag_split=True``. ``lds_num_buffers=2``
+independently uses two K LDS slots; ``v_reg_prefetch=True`` loads next-tile V
+registers
 before current PV. V LDS stays single-buffered for all combinations. All
 shipped defaults use ``lds_num_buffers=1`` and ``v_reg_prefetch=False``.
 
@@ -378,9 +379,9 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
 
     # use_cfvst: force the P1 conflict-free perm_b32 V transpose on/off.
     #   None -> the :func:`_use_cfvst` policy (fp16 D128). True is also legal at
-    #   bf16 D128 standard causal attention (no sliding window, causal_diag_split,
-    #   or sinks); False is always legal; D64 rejects True. KDB and VPF opt-ins
-    #   require bf16 D128 CFVST.
+    #   bf16 D128 causal attention (no sliding window or sinks), with or without
+    #   causal_diag_split; False is always legal; D64 rejects True. KDB and VPF
+    #   opt-ins require bf16 D128 CFVST.
     use_cfvst: bool | None = None
 
     # use_v_swizzle: force the V^T XOR bank-conflict swizzle on/off, INDEPENDENTLY of
@@ -469,8 +470,8 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     pv_sched_fence_mask: int | None = field(default=None, kw_only=True)
     # causal_diag_split: causal without a sliding window only -- an unmasked KV loop
     #   over below-diagonal tiles plus a masked diagonal tail, instead of masking
-    #   every tile. Off by default: the peel is recorded negative (register
-    #   pressure on the gfx942 tiled_2d kernel); kept to re-measure on dense.
+    #   every tile. The CFVST KDB/VPF pipeline also preserves K/V publication across
+    #   the two loop phases. Off by default; kept to re-measure on dense.
     causal_diag_split: bool = field(default=False, kw_only=True)
     # emit_lse: also write the natural-log softmax normalizer (LSE) as FP32
     #   [B, Hq, Sq, 1] through a trailing ``lse_ptr`` kernel argument. Off by default;
@@ -1217,19 +1218,18 @@ def supports_attention_dense(
     _wpe = spec.resolved_waves_per_eu()
     if _wpe <= 0:
         return False, f"waves_per_eu must be positive, got {_wpe}"
-    # The new BF16 CFVST opt-in is validated only for standard causal prefill.
+    # BF16 CFVST supports causal diagonal splitting as well as the unsplit path.
     # Preserve all existing FP16 CFVST configurations.
     if spec.dtype == "bf16" and spec.resolved_use_cfvst():
         if not (
             spec.head_size == 128
             and spec.causal
             and spec.sliding_window == 0
-            and not spec.causal_diag_split
             and not spec.use_sinks
         ):
             return False, (
-                "NOT_YET_IMPLEMENTED: BF16 CFVST requires D128 standard causal attention "
-                "without sliding_window, causal_diag_split, or sinks"
+                "NOT_YET_IMPLEMENTED: BF16 CFVST requires D128 causal attention "
+                "without sliding_window or sinks"
             )
     # CFVST is supported for D128 (bf16 and fp16). D64 uses packed DMA rows
     # and remains on the naive-V path; explicit CFVST there is rejected.
@@ -1261,13 +1261,11 @@ def supports_attention_dense(
         and spec.resolved_use_cfvst()
         and spec.block_n == 64
         and spec.sliding_window == 0
-        and not spec.causal_diag_split
         and not spec.use_sinks
     ):
         return False, (
             "NOT_YET_IMPLEMENTED: lds_num_buffers=2 or v_reg_prefetch=True requires "
-            "bf16 D128 causal CFVST at block_n=64, without sliding_window, "
-            "causal_diag_split, or sinks"
+            "bf16 D128 causal CFVST at block_n=64, without sliding_window or sinks"
         )
     if spec.iglp_mode not in (0, 1):
         return False, f"iglp_mode must be 0 or 1, got {spec.iglp_mode}"
@@ -1564,7 +1562,13 @@ def _build_attention_dense_single_buffer(
     qk_scale = b.fmul(scale, b.const_f32(LOG2E))
 
     tid = b.thread_id_x()
-    wave = b.div(tid, b.const_i32(64))
+    # In the CFVST KDB/VPF pipeline, the wave index is uniform across a wave.
+    # Scalarize at full EXEC before /64 so subsequent V buffer offsets can
+    # stay on the SGPR/SALU path; leave all nonpipeline IR unchanged.
+    if _use_kdb(spec) or _use_vpf(spec):
+        wave = b.div(b.to_sgpr_u32(tid), b.const_i32(64))
+    else:
+        wave = b.div(tid, b.const_i32(64))
     lane = b.mod(tid, b.const_i32(64))
     lane_m = b.mod(lane, b.const_i32(32))
     lane_h = b.div(lane, b.const_i32(32))
@@ -1938,6 +1942,48 @@ def _build_attention_dense_single_buffer(
                 payload.append((d0, t0, b.bitcast(x0, I32), b.bitcast(x1, I32)))
             return payload
 
+        def _cfvst_load_v_pipeline(tile_idx):
+            """Load packed V with one SGPR tile/wave base and a VGPR lane offset.
+
+            For BF16 D128 / BN64, V_DIM_PAIRS=64 and
+              blk = it * (WAVES * 64) + tid,
+              d0 = 2 * lane,
+              t0 = 2 * wave + 2 * it * WAVES.
+            The original unrolled loader rebuilt per-thread byte addresses and
+            div/mod coordinates for each item. Use buffer soffset for the uniform
+            tile/wave part and buffer voffset for the reusable lane offset.
+            Reconstruct V^T publication coordinates after PV rather than keeping
+            them live across the prefetch window.
+            """
+            if D != 128 or V_DIM_PAIRS != 64:
+                raise ValueError("pipeline V SGPR addressing requires D=128")
+            wave_key0 = b.add(
+                b.mul(tile_idx, b.const_i32(BN)),
+                b.mul(wave, b.const_i32(2)),
+            )
+            # Do the uniform-to-scalar conversion just once per tile.
+            soff0 = b.to_sgpr_u32(
+                b.mul(b.add(k_base, b.mul(wave_key0, _stride_k())), b.const_i32(2))
+            )
+            stride_bytes = b.mul(_stride_k(), b.const_i32(2))
+            lane_byte = b.mul(lane, b.const_i32(4))
+            values = []
+            for it in range(V_ITEMS):
+                soff_it = (
+                    soff0
+                    if it == 0
+                    else b.add(
+                        soff0,
+                        b.mul(stride_bytes, b.const_i32(it * 2 * WAVES)),
+                    )
+                )
+                x0 = b.buffer_load_vN(v_rsrc, lane_byte, soff_it, dtype, 2)
+                x1 = b.buffer_load_vN(
+                    v_rsrc, lane_byte, b.add(soff_it, stride_bytes), dtype, 2
+                )
+                values.append((b.bitcast(x0, I32), b.bitcast(x1, I32)))
+            return values
+
         def do_qk(kbuf=None):
             """S^T = K@Q^T via the 32x32x8 atom (K-doubled)."""
             s_reg = []
@@ -2220,11 +2266,13 @@ def _build_attention_dense_single_buffer(
                 # transposition coordinates. Recompute coordinates at publication.
                 payload = []
                 for it, (x0, x1) in enumerate(values):
-                    blk = b.add(b.mul(b.const_i32(it), b.const_i32(THREADS)), tid)
-                    tg = b.div(blk, b.const_i32(V_DIM_PAIRS))
-                    dg = b.mod(blk, b.const_i32(V_DIM_PAIRS))
-                    t0 = b.mul(tg, b.const_i32(2))
-                    d0 = b.mul(dg, b.const_i32(2))
+                    # blk=it*THREADS+tid, with THREADS=64*WAVES and
+                    # V_DIM_PAIRS=64. Unroll-time offsets eliminate div/mod.
+                    t0 = b.add(
+                        b.mul(wave, b.const_i32(2)),
+                        b.const_i32(it * 2 * WAVES),
+                    )
+                    d0 = b.mul(lane, b.const_i32(2))
                     payload.append((d0, t0, x0, x1))
                 _cfvst_store_v(payload)
 
@@ -2232,23 +2280,18 @@ def _build_attention_dense_single_buffer(
             # after draining their VMEM and after V's LDS writes complete.
             zero = b.const_i32(0)
             load_pipeline_k(zero, zero)
-            v0 = _cfvst_load_v(zero)
+            v0 = _cfvst_load_v_pipeline(zero)
             b.s_waitcnt(vmcnt=0)
-            _cfvst_store_v(v0)
+            publish_prefetched_v(v0)
             b.sync_lds_only()
 
             # Main loop deliberately excludes the final KV tile. n_up=1 makes
             # this a zero-trip loop; its prologue and epilogue still execute.
             last_j = b.sub(n_up, b.const_i32(1))
-            loop = b.scf_for_iter(
-                zero,
-                last_j,
-                b.const_i32(1),
-                iter_args,
-                iv_name="ktp",
-                elide_trailing_barrier=False,
-            )
-            with loop as (j, carry):
+
+            def pipeline_step(j, carry, *, masked):
+                """Compute tile j and publish tile j+1, retaining the LDS
+                rendezvous and pipeline scheduling across split-loop boundaries."""
                 m_i = carry[0]
                 l_i = carry[1]
                 o_acc = list(carry[2 : 2 + D_TILES])
@@ -2267,9 +2310,9 @@ def _build_attention_dense_single_buffer(
                     load_pipeline_k(next_kbuf, next_j)
                 if USE_VPF:
                     # Only V data (not addresses) stays live across softmax/PV.
-                    v_next = [(x0, x1) for _d0, _t0, x0, x1 in _cfvst_load_v(next_j)]
+                    v_next = _cfvst_load_v_pipeline(next_j)
                 m_new, l_new, o_acc = softmax_pv(
-                    s, j, m_i, l_i, o_acc, masked=True, lower=False
+                    s, j, m_i, l_i, o_acc, masked=masked, lower=False
                 )
 
                 # WAR: finish all waves' K/V LDS reads before a single K slot
@@ -2281,13 +2324,60 @@ def _build_attention_dense_single_buffer(
                     load_pipeline_k(next_kbuf, next_j)
                 if not USE_VPF:
                     # No V prefetch: issue V[j+1] loads only after current PV.
-                    v_next = [(x0, x1) for _d0, _t0, x0, x1 in _cfvst_load_v(next_j)]
+                    v_next = _cfvst_load_v_pipeline(next_j)
                 # Drain next K async-DMA and next V VMEM loads before V LDS
                 # publication; then rendezvous before any next-tile QK/PV.
                 b.s_waitcnt(vmcnt=0)
                 publish_prefetched_v(v_next)
                 b.sync_lds_only()
                 b.scf_yield(m_new, l_new, *o_acc)
+
+            if causal and DIAG_SPLIT:
+                # At kt < qb * (BLOCK_M/BN), every key precedes every query
+                # row, so the causal upper mask is unnecessary. Split only the
+                # processing loop (which excludes last_j). It continuously
+                # publishes K/V tile j+1 across the loop transition, and the
+                # final tile remains safely masked even when it is below the
+                # diagonal (e.g. seqlen_kv < seqlen_q).
+                diag_start = b.mul(qb, b.const_i32(n_per))
+                body_upper = b.select(
+                    b.cmp_lt(diag_start, last_j), diag_start, last_j
+                )
+                body = b.scf_for_iter(
+                    zero,
+                    body_upper,
+                    b.const_i32(1),
+                    iter_args,
+                    iv_name="kbp",
+                    elide_trailing_barrier=False,
+                )
+                with body as (j, carry):
+                    pipeline_step(j, carry, masked=False)
+                tail_args = [
+                    (name + "_t", val) for (name, _), val in zip(iter_args, body.results)
+                ]
+                loop = b.scf_for_iter(
+                    body_upper,
+                    last_j,
+                    b.const_i32(1),
+                    tail_args,
+                    iv_name="ktp",
+                    elide_trailing_barrier=False,
+                )
+                with loop as (j, carry):
+                    pipeline_step(j, carry, masked=True)
+            else:
+                # Preserve the non-split pipeline's original emitted operations.
+                loop = b.scf_for_iter(
+                    zero,
+                    last_j,
+                    b.const_i32(1),
+                    iter_args,
+                    iv_name="ktp",
+                    elide_trailing_barrier=False,
+                )
+                with loop as (j, carry):
+                    pipeline_step(j, carry, masked=True)
 
             # Epilogue: do not issue K/V loads beyond n_up-1. The last LDS
             # barrier also protects CTA-persistent storage reuse by the next item.

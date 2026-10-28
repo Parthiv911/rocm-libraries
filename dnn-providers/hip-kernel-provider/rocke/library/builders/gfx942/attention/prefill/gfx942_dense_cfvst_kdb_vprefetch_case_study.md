@@ -459,7 +459,10 @@ export PYTHONPATH="$PWD/platform/python:$PWD/library:$PWD"
 
 ```
 
-Results are written to `gpu-bench/` by default.
+Results are written to `/root/gpu-bench/rocke_5way_specs_results`
+when using the `--out-dir` argument shown above. When omitted,
+the benchmark uses the default directory configured in
+`bench_rocke_5way_specs.py`.
 
 ### Global-Memory Coalescing and ISA Verification (§R.5)
 
@@ -509,3 +512,32 @@ ISA address analysis also verified the first V x0/x1 pair:
 The two revisions have no identified active K/V load implementation changes, although binary equivalence has not been established. The recorded LLVM version identifies the disassembler, not necessarily the compilation flavor.
 
 **Conclusion:** K and V global loads remain fully coalesced, with a 1.0× cache-line footprint and emitted widths matching static predictions. No global-memory coalescing regression was identified for the verified CFVST+KDB+VPF configuration.
+
+
+## Runbook and Architecture Compliance
+
+The CFVST, K LDS double-buffering (KDB), and V register-prefetching (VPF) optimizations follow the CK DSL Optimization Runbook (`platform/dsl_docs/optimization/optimization_runbook.md`) and the gfx942-specific architecture constraints (`platform/dsl_docs/optimization/arch/gfx942.md`, §21).
+
+### Per-Lever Mapping
+
+| Lever | Implementation | Runbook sections | §13.3 Attention checklist | gfx942 architecture reference |
+|---|---|---|---|---|
+| `use_cfvst=True` | `perm_b32` store-path transpose into transposed V LDS, with optional XOR swizzling | §6.3 LDS, §6.4 bank conflicts, §6.5 registers, §7.2 operand layouts | Tile Q / K / V; shared memory capacity; register pressure from accumulators | §21.2 LDS geometry and banks; §21.3 `v_perm_b32` cross-lane primitive; §21.4 VGPR constraints; §21.8 transpose-read limitations |
+| `lds_num_buffers=2` | Double-buffer K in LDS to overlap next-tile K loading with current-tile computation; V LDS remains single-buffered | §6.3 LDS, §8.1 software pipelining, §8.2 async copy, §8.3 waits and barriers | Tile Q / K / V; shared memory capacity; register pressure from accumulators | §21.2 64 KiB LDS capacity; §21.4 occupancy constraints; §21.6 async LDS load width; §21.8 ISA constraints |
+| `v_reg_prefetch=True` | Prefetch next-tile V into registers to overlap memory loading with current-tile computation | §6.5 registers, §8.1 software pipelining, §8.2 async copy, §8.3 waits and barriers | Tile Q / K / V; register pressure from accumulators | §21.4 VGPR pressure and occupancy; §21.6 global buffer-load widths; §21.8 ISA constraints |
+
+### Architecture and Configuration Gating
+
+The optimizations are implemented in `library/kernels/gfx942/attention_dense.py`, using `Gfx942AttentionDenseSpec`.
+
+Architecture eligibility is enforced by the existing `arch != "gfx942"` checks in `supports_attention_dense(spec, arch=...)` and `build_attention_dense(spec, arch=...)`. The support predicate returns `(False, reason)` for other architectures, while the builder raises `NotImplementedError`. Dispatch also restricts the gfx942 dense candidate to gfx942 through its architecture-specific registration and spec factory.
+
+The optimization-specific eligibility conditions are enforced by `supports_attention_dense()`:
+
+- **CFVST (`use_cfvst=True`):** For BF16, requires D128 causal attention without sliding window or attention sinks. Causal diagonal splitting is supported. Existing FP16 CFVST behavior is preserved.
+- **KDB (`lds_num_buffers=2`):** Requires BF16 D128 causal attention, CFVST enabled, `block_n=64`, no sliding window, and no attention sinks.
+- **VPF (`v_reg_prefetch=True`):** Has the same eligibility conditions as KDB but is independently controlled. Enabling VPF does not require enabling KDB.
+
+The combined K/V LDS allocation is checked against the gfx942 capacity using `attention_lds_capacity_bytes(arch)` and `_lds_bytes(spec)`. Unsupported configurations are rejected before kernel emission.
+
+For BF16, the default configuration retains `use_cfvst=False`, `lds_num_buffers=1`, and `v_reg_prefetch=False`. All three optimizations remain opt-in and do not change the default kernel behavior.
