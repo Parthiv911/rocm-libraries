@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Eight-arm gfx942 BF16 D128 attention: Step-0 winner A vs seven-stage B ablation.
+"""Eight-arm persistent gfx942 BF16 D128 attention: Step-0 winner A vs seven-stage B ablation.
 
 A is the exact shape-specific existing-lever sweep winner from the supplied
 12-row table (no CFVST/KDB/VPF). B[1..7] always start from the CURRENT
@@ -27,10 +27,12 @@ shared Q/K/V and chunked NumPy FP32 causal GQA reference over BF16 inputs,
 BF16 correctness before timing and after every timed batch,
 round-robin warmup, five randomized rounds, 50 launches per arm per round,
 median latency and same-round paired min/max speedups.
-Dirty/untracked Git state is allowed; provenance/source hashes are recorded.
+provenance/source hashes are recorded.
 Absolute latency results are kept in local CSVs.
-Default cohort: exactly the twelve BF16 D128 causal shapes with A winners.
-Custom --shape values must have an explicitly supplied Step-0 winner.
+Default cohort: the eight persistent-304 BF16 D128 causal shapes with A winners.
+The four nonpersistent S=1024/2048 shapes are excluded because the support
+contract gates KDB/VPF to persistent=True. Custom --shape values must have an
+explicitly supplied Step-0 winner AND select persistent production dispatch.
 """
 
 from __future__ import annotations
@@ -347,14 +349,12 @@ class Shape:
         )
 
 
-# Original twelve-shape cohort. Compile, validate and time all seven arms.
+# Persistent-only default cohort. Exclude B=1 S=1024/2048, where dispatch is
+# nonpersistent and supports_attention_dense rejects all KDB/VPF stages.
+# Compile, validate and time all seven B arms plus A on each eligible shape.
 
 
 DEFAULT_SHAPES = (
-    Shape(1, 1024, 32, 8, 128, "bf16"),
-    Shape(1, 1024, 32, 16, 128, "bf16"),
-    Shape(1, 2048, 32, 8, 128, "bf16"),
-    Shape(1, 2048, 32, 16, 128, "bf16"),
     Shape(1, 4096, 32, 8, 128, "bf16"),
     Shape(1, 4096, 32, 16, 128, "bf16"),
     Shape(1, 8192, 32, 8, 128, "bf16"),
@@ -781,7 +781,7 @@ def main() -> int:
         "--shape",
         type=parse_shape,
         action="append",
-        help="B,S,Hq,Hkv,128,bf16 (repeatable; overrides default twelve shapes)",
+        help="B,S,Hq,Hkv,128,bf16 (repeatable; overrides default eight persistent shapes)",
     )
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--rounds", type=int, default=5)
@@ -908,6 +908,12 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
             raise RuntimeError(
                 f"{shape.label}: dispatch returned {type(production).__name__}, "
                 "not Gfx942AttentionDenseSpec"
+            )
+        if not production.persistent:
+            raise RuntimeError(
+                f"{shape.label}: production dispatch selected persistent=False; "
+                "KDB/VPF are gated to persistent=True. This eight-arm benchmark "
+                "requires a persistent shape."
             )
 
         # A = exact shape-specific best EXISTING-LEVER kernel, independently

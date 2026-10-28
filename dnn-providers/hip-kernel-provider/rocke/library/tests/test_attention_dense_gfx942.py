@@ -359,10 +359,25 @@ _INJECTIVITY_BASES = {
     "d128_fp16_cfvst_iglp": dict(head_size=128, dtype="fp16", iglp=True),
     "d128_bf16_naive": dict(head_size=128, dtype="bf16"),
     "d128_bf16_cfvst": dict(head_size=128, dtype="bf16", use_cfvst=True),
+    "persistent_d128_bf16_cfvst": dict(
+        head_size=128,
+        dtype="bf16",
+        use_cfvst=True,
+        persistent=True,
+        num_persistent=228,
+        seqlen_q=4096,
+        seqlen_kv=4096,
+        num_query_heads=32,
+    ),
     "d128_bf16_kdbvpf": dict(
         head_size=128,
         dtype="bf16",
         use_cfvst=True,
+        persistent=True,
+        num_persistent=228,
+        seqlen_q=4096,
+        seqlen_kv=4096,
+        num_query_heads=32,
         lds_num_buffers=2,
         v_reg_prefetch=True,
     ),
@@ -370,6 +385,11 @@ _INJECTIVITY_BASES = {
         head_size=128,
         dtype="bf16",
         use_cfvst=True,
+        persistent=True,
+        num_persistent=228,
+        seqlen_q=4096,
+        seqlen_kv=4096,
+        num_query_heads=32,
         lds_num_buffers=2,
         v_reg_prefetch=True,
         iglp=True,
@@ -1042,12 +1062,15 @@ def test_lds_budget_boundary_is_accepted_at_exactly_capacity():
 # lds_num_buffers=1 stays byte-for-byte upstream for existing configurations.
 # --------------------------------------------------------------------------- #
 def test_bf16_cfvst_kdb_vpf_are_separate_opt_in_variants():
-    baseline = _spec()
-    cfvst_only = _spec(use_cfvst=True)
-    kdb_only = _spec(use_cfvst=True, lds_num_buffers=2)
-    vpf_only = _spec(use_cfvst=True, v_reg_prefetch=True)
-    combined = _spec(use_cfvst=True, lds_num_buffers=2, v_reg_prefetch=True)
-    fp16 = _spec(dtype="fp16")
+    persistent = dict(persistent=True, num_persistent=304)
+    baseline = _spec(**persistent)
+    cfvst_only = _spec(use_cfvst=True, **persistent)
+    kdb_only = _spec(use_cfvst=True, lds_num_buffers=2, **persistent)
+    vpf_only = _spec(use_cfvst=True, v_reg_prefetch=True, **persistent)
+    combined = _spec(
+        use_cfvst=True, lds_num_buffers=2, v_reg_prefetch=True, **persistent
+    )
+    fp16 = _spec(dtype="fp16", **persistent)
 
     assert not baseline.resolved_use_cfvst()
     assert not _use_kdb(baseline) and not _use_vpf(baseline)
@@ -1088,13 +1111,44 @@ def test_bf16_cfvst_kdb_vpf_are_separate_opt_in_variants():
 
 
 @pytest.mark.parametrize(
+    "overrides",
+    [
+        {"use_cfvst": True, "lds_num_buffers": 2},
+        {"use_cfvst": True, "v_reg_prefetch": True},
+        {"use_cfvst": True, "lds_num_buffers": 2, "v_reg_prefetch": True},
+    ],
+)
+def test_cfvst_kdb_vpf_pipeline_requires_persistent(overrides):
+    spec = _spec(persistent=False, **overrides)
+    ok, reason = supports_attention_dense(spec, arch="gfx942")
+    assert not ok and "persistent=True" in reason, reason
+    with pytest.raises(ValueError, match="unsupported gfx942 attention_dense spec"):
+        build_attention_dense(spec, arch="gfx942")
+
+
+@pytest.mark.parametrize(
     "overrides, expected_bytes",
     [
         ({}, 34816),  # naive V, K[1, 64, 136] + V[1, 64, 136]
         ({"use_cfvst": True}, 33792),  # K[1, 64, 136] + V^T[128, 64]
-        ({"use_cfvst": True, "lds_num_buffers": 2}, 51200),
-        ({"use_cfvst": True, "v_reg_prefetch": True}, 33792),
-        ({"use_cfvst": True, "lds_num_buffers": 2, "v_reg_prefetch": True}, 51200),
+        (
+            {"use_cfvst": True, "lds_num_buffers": 2, "persistent": True, "num_persistent": 304},
+            51200,
+        ),
+        (
+            {"use_cfvst": True, "v_reg_prefetch": True, "persistent": True, "num_persistent": 304},
+            33792,
+        ),
+        (
+            {
+                "use_cfvst": True,
+                "lds_num_buffers": 2,
+                "v_reg_prefetch": True,
+                "persistent": True,
+                "num_persistent": 304,
+            },
+            51200,
+        ),
         ({"dtype": "fp16"}, 33792),  # unchanged upstream FP16 CFVST
     ],
     ids=[
@@ -1178,6 +1232,8 @@ def test_cfvst_kdb_vpf_rejects_over_budget_lds():
         lds_row_pad=68,
         use_cfvst=True,
         lds_num_buffers=2,
+        persistent=True,
+        num_persistent=304,
     )
     # 2 * 64 * (128 + 68) * 2 + 128 * 64 * 2 = 66560 B.
     assert _lds_bytes(spec) == 66560
@@ -1219,7 +1275,7 @@ def test_cfvst_kdb_vpf_rejects_over_budget_lds():
     ],
 )
 def test_cfvst_kdb_vpf_rejects_unsupported_modes(overrides):
-    spec = _spec(**overrides)
+    spec = _spec(**{"persistent": True, "num_persistent": 304, **overrides})
     ok, reason = supports_attention_dense(spec, arch="gfx942")
     assert not ok and reason, (overrides, reason)
     with pytest.raises(ValueError, match="unsupported gfx942 attention_dense spec"):
@@ -1395,9 +1451,15 @@ _CONTRACT_GRID = [
     # --- private: performance-only codegen knobs ---
     dict(lds_num_buffers=1),  # accepted: upstream single K buffer
     dict(lds_num_buffers=2),  # REJECTED: BF16 without CFVST
-    dict(use_cfvst=True, lds_num_buffers=2),  # ACCEPTED: KDB alone
-    dict(use_cfvst=True, v_reg_prefetch=True),  # ACCEPTED: VPF alone
-    dict(use_cfvst=True, lds_num_buffers=2, v_reg_prefetch=True),  # ACCEPTED: both
+    dict(use_cfvst=True, lds_num_buffers=2, persistent=True, num_persistent=304),  # ACCEPTED: KDB alone
+    dict(use_cfvst=True, v_reg_prefetch=True, persistent=True, num_persistent=304),  # ACCEPTED: VPF alone
+    dict(
+        use_cfvst=True,
+        lds_num_buffers=2,
+        v_reg_prefetch=True,
+        persistent=True,
+        num_persistent=304,
+    ),  # ACCEPTED: both
     dict(v_reg_prefetch=True),  # REJECTED: BF16 without CFVST
     dict(dtype="fp16", lds_num_buffers=2),  # REJECTED: pipeline is BF16-only
     dict(iglp=True, iglp_mode=1),  # accepted

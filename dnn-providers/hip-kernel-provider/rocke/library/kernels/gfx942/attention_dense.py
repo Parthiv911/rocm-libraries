@@ -1255,7 +1255,8 @@ def supports_attention_dense(
     # the same validated BF16 D128 CFVST scope. In particular, block_n=64 only:
     # the other tile sizes have not been validated for these pipeline modes.
     if (_use_kdb(spec) or _use_vpf(spec)) and not (
-        spec.dtype == "bf16"
+        spec.persistent
+        and spec.dtype == "bf16"
         and spec.head_size == 128
         and spec.causal
         and spec.resolved_use_cfvst()
@@ -1265,7 +1266,7 @@ def supports_attention_dense(
     ):
         return False, (
             "NOT_YET_IMPLEMENTED: lds_num_buffers=2 or v_reg_prefetch=True requires "
-            "bf16 D128 causal CFVST at block_n=64, without sliding_window or sinks"
+            "persistent=True, bf16 D128 causal CFVST at block_n=64, without sliding_window or sinks"
         )
     if spec.iglp_mode not in (0, 1):
         return False, f"iglp_mode must be 0 or 1, got {spec.iglp_mode}"
