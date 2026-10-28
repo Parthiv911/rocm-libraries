@@ -1,16 +1,8 @@
 # gfx942 bf16 D128 causal prefill: CFVST, K LDS double buffering, and V register prefetch
 
-Measured scope: the opt-in `use_cfvst=True`, `lds_num_buffers=2`, `v_reg_prefetch=True` configuration of the
-gfx942 dense prefill attention kernel, bf16, D128, causal, on gfx942 with 304 CUs.
-
-Baseline: the `baseline` arm of the ablation harness, compiled in the same process from
-the benchmarked source commit (see
-[Benchmark Environment and Provenance](#benchmark-environment-and-provenance)). Result: 10.78–15.71% lower
-latency at the 12 measured configurations listed under Results.
-
 ## Introduction
 
-This optimization enables CFVST and implements K LDS Double Buffering and V register pre-fetching on D128 bf16 causal prefill attention gfx942 kernels.
+This optimization enables CFVST and implements K LDS Double Buffering and V register pre-fetching on D128 bf16 persistent=true causal prefill attention gfx942 kernels.
 
 ## Problem
 
@@ -30,7 +22,7 @@ Lever sweep was performed to check whether performance could be improved by tuni
 
 | Parameter | Value |
 |---|---|
-| GPU | AMD MI300X (`gfx942`, 304 CUs) |
+| GPU | (`gfx942`, 304 CUs) |
 | Repository / branch | [ROCm/rocm-libraries](https://github.com/ROCm/rocm-libraries), `develop` |
 | Source commit | [`c8980b69a3b8c41f3be97495e7ef886cff07c892`](https://github.com/ROCm/rocm-libraries/commit/c8980b69a3b8c41f3be97495e7ef886cff07c892) |
 | Data type | **BF16** |
@@ -128,62 +120,24 @@ We explore whether introducing optimizations:
 
 ## Optimization 1: Enable CFVST
 
-V was stored in traditional layout in LDS. This caused bank conflicts during access. The hypothesis was that transposed layout would reduce bank conflicts. This feature was already present (CFVST) but disabled for bf16 due to register spillage concerns. Performance improved substantially with it enabled, so we adopted this optimization.
+V was stored in traditional layout in LDS. This caused bank conflicts during access. The hypothesis was that transposed layout would reduce bank conflicts. This feature was already present (CFVST) but disabled for bf16 due to register spillage concerns. Performance improved substantially with it enabled, so we adopted this optimization. However, we do not claim that it reduced bank conflicts as it was not measured.
 
-#### Register usage
+### Register Usage and Static Occupancy (§R.4)
 
-Source HEAD: `76935189336d51bccf6164af7b8d2ce9a2be13f7`,
-kernel source SHA-256: `a1964d6e2ed5dfb3173c472d02f1726e49af95c9161522a678aedcd70bbade5d`.
+Compiled gfx942 BF16 D128 causal prefill (BM256/BN64, persistent-304, 512 threads/WG) with LLVM20 and LLVM23. The saved HSACO metadata was analyzed with `probe_regs.py` and `probe_occupancy.py`.
 
-Toolchain measurements:
+| Configuration | LLVM20 VGPR | LLVM23 VGPR | VGPR/SGPR spills | Scratch |
+|---|---:|---:|---:|---:|
+| Baseline | 193 | 194 | 0 / 0 | 0 B/thread |
+| CFVST | 228 | 225 | 0 / 0 | 0 B/thread |
+| CFVST + KDB | 210 | 230 | 0 / 0 | 0 B/thread |
+| CFVST + VPF | 218 | 230 | 0 / 0 | 0 B/thread |
+| **CFVST + KDB + VPF** | **216** | **230** | **0 / 0** | **0 B/thread** |
+| Full + pad4 | 218 | 230 | 0 / 0 | 0 B/thread |
+| Full + pad4 + diagonal split | 218 | 232 | 0 / 0 | 0 B/thread |
+| Full + LSE | 218 | 232 | 0 / 0 | 0 B/thread |
 
-VGPR count, spill count, and scratch bytes per thread, read from the code-object
-notes (`.vgpr_count`, `.vgpr_spill_count`, `.private_segment_fixed_size`) for gfx942,
-B1 S4096 Hq32 Hkv8 D128 causal, at two pinned toolchains: the `llvm20` IR flavor
-compiled by ROCm 7.1 comgr, and the `llvm23` IR flavor compiled by the ROCm 10 SDK comgr
-(AMD clang 23.0.0git). The `waves_per_eu=2` cap is 256 VGPRs.
-
-| variant | llvm20 VGPR | llvm20 spills | llvm20 scratch (B) | llvm23 VGPR | llvm23 spills | llvm23 scratch (B) |
-|---|---:|---:|---:|---:|---:|---:|
-| bf16 default (CFVST off) | 243 | 0 | 0 | 219 | 0 | 0 |
-| bf16 `use_cfvst=True` | 256 | 0 | 0 | 234 | 0 | 0 |
-| + `lds_num_buffers=2`, `v_reg_prefetch=True` | 256 | 4 | 20 | 230 | 0 | 0 |
-| + `emit_lse=True` | 256 | 5 | 24 | 230 | 0 | 0 |
-| + `persistent=True`, `num_persistent=304` | 256 | 16 | 68 | 256 | 7 | 32 |
-
-CFVST alone does not spill at either toolchain; at `llvm20` it sits exactly at the
-256-VGPR cap. The K double buffer and V prefetch pipeline spills at `llvm20`, and at
-`llvm23` only on the persistent grid. In every spilling variant the inner KV loop
-contains no scratch instructions: the spill reloads sit outside it, and on the
-persistent grid they run once per work item (16 at `llvm20`, 7 at `llvm23`). The
-`llvm22` flavor was not measured.
-
-#### llvm23 static code-object measurements (persistent-304)
-
-BF16 D128 causal, B1 S4096 Hq32 Hkv8, gfx942 (304 CUs), `llvm23`,
-`persistent=True`, `num_persistent=304`, `block_m=256`, `block_n=64`,
-`waves_per_eu=2`, `lds_row_pad=8`, `emit_lse=False`.
-
-Code-object metadata was checked directly with `llvm-readobj --notes`; the
-combined configuration's counts were reproduced by a separate compilation.
-
-| variant | SGPR | VGPR | SGPR spills | VGPR spills | Scratch (B/thread) | LDS (KiB/WG) |
-|---|---:|---:|---:|---:|---:|---:|
-| baseline | 41 | 194 | 0 | 0 | 0 | 34 |
-| CFVST | 42 | 225 | 0 | 0 | 0 | 33 |
-| CFVST + KDB | 48 | 254 | 0 | 0 | 0 | 50 |
-| CFVST + VPF | 48 | 256 | 0 | 9 | 40 | 33 |
-| CFVST + KDB + VPF | 48 | 256 | 0 | 5 | 24 | 50 |
-| Full minus baseline | +7 | +62 | 0 | +5 | +24 | +16 |
-
-| variant | Total static ISA | `ds_read` | `ds_write` | `s_waitcnt` | `lgkmcnt(0)` | `s_barrier` | MFMA |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| baseline | 1979 | 144 | 0 | 86 | 52 | 3 | 64 |
-| CFVST | 1810 | 32 | 8 | 31 | 21 | 3 | 64 |
-| CFVST + KDB | 2576 | 64 | 16 | 56 | 38 | 5 | 128 |
-| CFVST + VPF | 2574 | 64 | 16 | 66 | 38 | 5 | 128 |
-| CFVST + KDB + VPF | 2578 | 64 | 16 | 68 | 38 | 5 | 128 |
-| Full minus baseline | +599 | -80 | +16 | -18 | -14 | +2 | +64 |
+All 16 compiled variants were spill-free. `probe_occupancy.py` estimates **8 waves/CU, 1 WG/CU**, with LDS reported as the limiting resource. Base line kernel here is `rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_bthkvmin_gfx942_wpe2`. The source commit is same as below benchmark.
 
 ## Optimization 2 and 3: K LDS Double Buffering + V register pre-fetching
 
@@ -191,134 +145,123 @@ Analysis of stalls using threadtrace found a large number of waiting at sync poi
 
 #### Results
 
-**Hardware:** gfx942, 304 CUs
+## Performance vs. Step-0 Lever-Sweep Winners
 
-| dtype | B | S | Hq | Hkv | D | baseline vs CFVST+KDB+VPF | latency reduction | min | max |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| bf16 | 1 | 1024 | 32 | 8 | 128 | 1.1209x | 10.78% | 10.34% | 11.23% |
-| bf16 | 1 | 1024 | 32 | 16 | 128 | 1.1371x | 12.06% | 10.77% | 12.40% |
-| bf16 | 1 | 2048 | 32 | 8 | 128 | 1.1218x | 10.86% | 10.40% | 11.11% |
-| bf16 | 1 | 2048 | 32 | 16 | 128 | 1.1267x | 11.25% | 10.12% | 11.51% |
-| bf16 | 1 | 4096 | 32 | 8 | 128 | 1.1754x | 14.92% | 14.44% | 15.80% |
-| bf16 | 1 | 4096 | 32 | 16 | 128 | 1.1785x | 15.14% | 14.50% | 15.35% |
-| bf16 | 1 | 8192 | 32 | 8 | 128 | 1.1836x | 15.51% | 15.26% | 15.76% |
-| bf16 | 1 | 8192 | 32 | 16 | 128 | 1.1864x | 15.71% | 15.30% | 15.90% |
-| bf16 | 1 | 16384 | 32 | 8 | 128 | 1.1783x | 15.13% | 14.82% | 15.39% |
-| bf16 | 16 | 4096 | 32 | 8 | 128 | 1.1614x | 13.90% | 13.65% | 14.40% |
-| bf16 | 16 | 4096 | 32 | 16 | 128 | 1.1345x | 11.85% | 11.55% | 12.17% |
-| bf16 | 16 | 8192 | 32 | 8 | 128 | 1.1644x | 14.12% | 13.43% | 14.78% |
+All results are for **gfx942, BF16 D128 causal attention, persistent-304**, with `Hq=32`. The **baseline** for every comparison is the shape-specific **Step-0 lever-sweep winner (`A`)**, not the production-dispatch baseline.
 
-Min/max are paired within-round baseline-to-full latency reductions.
+Measurements use LLVM23, 10 warmup launches, 5 randomized rounds, and 50 timed launches per round. All compared kernels passed BF16-versus-FP32 correctness checks (`atol=rtol=1e-2`).
 
-#### Ablation studies of optimizations
-We performed ablation study to isolate the optimizations and understand its individual contributions.
+### Ablation: Each Configuration vs. Step-0 Winner
 
-| dtype | B | S | Hq | Hkv | D | CFVST vs base | CFVST + KDB vs CFVST | CFVST + VPF vs CFVST | Full vs CFVST | Full vs base |
+| dtype | B | S | Hq | Hkv | D | CFVST | CFVST + KDB | CFVST + VPF | CFVST + KDB + VPF | **CFVST + KDB + VPF + LDS pad4 + causal split** |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| bf16 | 1 | 1024 | 32 | 8 | 128 | 4.21% | -0.94% | 0.89% | 6.86% | 10.78% |
-| bf16 | 1 | 1024 | 32 | 16 | 128 | 4.89% | 0.00% | 2.92% | 7.54% | 12.06% |
-| bf16 | 1 | 2048 | 32 | 8 | 128 | 4.53% | -0.48% | 1.94% | 6.62% | 10.86% |
-| bf16 | 1 | 2048 | 32 | 16 | 128 | 4.64% | 0.02% | 2.43% | 6.93% | 11.25% |
-| bf16 | 1 | 4096 | 32 | 8 | 128 | 10.25% | 1.67% | 1.64% | 5.20% | 14.92% |
-| bf16 | 1 | 4096 | 32 | 16 | 128 | 9.69% | 2.59% | 2.10% | 6.04% | 15.14% |
-| bf16 | 1 | 8192 | 32 | 8 | 128 | 10.09% | 2.02% | 0.94% | 6.03% | 15.51% |
-| bf16 | 1 | 8192 | 32 | 16 | 128 | 10.21% | 2.35% | 1.37% | 6.13% | 15.71% |
-| bf16 | 1 | 16384 | 32 | 8 | 128 | 10.46% | 1.47% | 1.13% | 5.22% | 15.13% |
-| bf16 | 16 | 4096 | 32 | 8 | 128 | 10.30% | 0.76% | 0.02% | 4.01% | 13.90% |
-| bf16 | 16 | 4096 | 32 | 16 | 128 | 8.99% | 1.47% | 0.38% | 3.14% | 11.85% |
-| bf16 | 16 | 8192 | 32 | 8 | 128 | 10.86% | 0.49% | 0.17% | 3.66% | 14.12% |
+| bf16 | 1 | 4096 | 32 | 8 | 128 | 2.46% | 4.37% | 7.54% | 8.62% | **12.28%** |
+| bf16 | 1 | 4096 | 32 | 16 | 128 | 2.21% | 4.39% | 7.65% | 8.78% | **12.39%** |
+| bf16 | 1 | 8192 | 32 | 8 | 128 | 2.71% | 4.94% | 8.27% | 9.54% | **14.12%** |
+| bf16 | 1 | 8192 | 32 | 16 | 128 | 1.45% | 3.56% | 6.90% | 8.70% | **13.02%** |
+| bf16 | 1 | 16384 | 32 | 8 | 128 | 3.53% | 5.44% | 9.58% | 10.58% | **15.72%** |
+| bf16 | 16 | 4096 | 32 | 8 | 128 | 0.80% | 2.00% | 5.54% | 6.90% | **10.40%** |
+| bf16 | 16 | 4096 | 32 | 16 | 128 | 1.07% | 3.38% | 6.32% | 7.80% | **10.13%** |
+| bf16 | 16 | 8192 | 32 | 8 | 128 | 0.34% | 2.20% | 5.90% | 7.54% | **11.52%** |
+
+### Final Configuration vs. Step-0 Winner (Paired Range)
+
+**Final configuration:** CFVST + K LDS double buffering (KDB) + V register prefetch (VPF) + `lds_row_pad=4` + `causal_diag_split=True`.
+
+| dtype | B | S | Hq | Hkv | D | **Latency reduction** | Min | Max |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| bf16 | 1 | 4096 | 32 | 8 | 128 | **12.28%** | 11.68% | 13.53% |
+| bf16 | 1 | 4096 | 32 | 16 | 128 | **12.39%** | 11.67% | 12.68% |
+| bf16 | 1 | 8192 | 32 | 8 | 128 | **14.12%** | 13.63% | 14.32% |
+| bf16 | 1 | 8192 | 32 | 16 | 128 | **13.02%** | 12.78% | 13.21% |
+| bf16 | 1 | 16384 | 32 | 8 | 128 | **15.72%** | 15.53% | 16.00% |
+| bf16 | 16 | 4096 | 32 | 8 | 128 | **10.40%** | 10.29% | 10.62% |
+| bf16 | 16 | 4096 | 32 | 16 | 128 | **10.13%** | 9.80% | 10.20% |
+| bf16 | 16 | 8192 | 32 | 8 | 128 | **11.52%** | 11.38% | 11.90% |
+
+**Min/max** are the extrema of same-round paired speedups converted to latency-reduction percentages. Central values use the ratio of the five-round median latencies.
+
+**Scope:** These are direct, same-checkout comparisons against the Step-0 winners. Candidate kernels are derived from production dispatch with the named optimizations enabled; they do **not** inherit the Step-0 winner's other tuning knobs.
 
 ## Results and Ablation Methodology
-The complete experiment can be summarized as follows:
 
-For each of the 12 BF16 D128 causal attention shapes:
+The benchmark compares each shape's **Step-0 existing-lever sweep winner (`A`)** against seven independently compiled configurations derived from the **current production dispatch**. It uses the eight supported persistent-304 BF16 D128 causal attention shapes (not the earlier twelve-shape cohort).
 
-1. Start one ROCKE/PyTorch process using a single ROCm software stack.
-2. Obtain the current HIP stream and use it for all kernel executions.
-3. Resolve the production baseline using `attention_tuning_spec(req, "gfx942_dense").kernel_spec`.
-4. Construct five compile-time configurations, preserving all non-ablation knobs from production dispatch:
+For each of the eight shapes:
 
-| Variant | `use_cfvst` | `lds_num_buffers` (K) | `v_reg_prefetch` |
-|---|---:|---:|---:|
-| `baseline` | `False` | 1 | `False` |
-| `cfvst` | `True` | 1 | `False` |
-| `cfvst_klds` | `True` | 2 | `False` |
-| `cfvst_vpf` | `True` | 1 | `True` |
-| `cfvst_klds_vpf` | `True` | 2 | `True` |
+1. Start one **torch-free** rocKE/NumPy Python process with one ROCm stack, the Python compilation backend, and LLVM23. Record the GPU, actual HIP runtime/COMGR libraries, Git HEAD, working-tree status, and source hashes.
+2. Create one dedicated HIP stream using `rocke.runtime.hip_module` and use that stream for every kernel launch and timing event.
+3. Build the shape's `AttentionRequest` and resolve the production specification using `attention_tuning_spec(req, "gfx942_dense").kernel_spec`. Require persistent dispatch (`persistent=True`, `num_persistent=304`); reject unsupported shapes.
+4. Construct the separate **`A` comparator** by applying the recorded shape-specific Step-0 winning *existing* levers. Keep `use_cfvst=False`, `lds_num_buffers=1`, and `v_reg_prefetch=False`. The previous winner is rebuilt using the **current checkout**, not timed using historical measurements.
+5. Construct seven **B-stage** specifications from the *current production-dispatch specification*, **not** from `A`. Preserve all non-ablation production knobs except the explicitly stated LDS-padding and causal-split overrides:
 
-5. Run the Python kernel emitter separately for each configuration.
-6. Compile five independent kernels into separate HSACO artifacts. Each kernel has its own compile-time configuration; there is no runtime variant-selection branch in the GPU kernel.
-7. Verify that the five compiled kernel names are unique.
-8. Allocate one shared Q/K/V input set and separate output tensors for each variant.
-9. Construct one direct `KernelLauncher` per compiled kernel.
+   | Arm | Variant | `use_cfvst` | `lds_num_buffers` (K) | `v_reg_prefetch` | `lds_row_pad` | `causal_diag_split` |
+   |---:|---|---:|---:|---:|---|---|
+   | A | `A` (Step-0 winner) | `False` | 1 | `False` | Shape-specific winner | Shape-specific winner |
+   | B1 | `baseline` | `False` | 1 | `False` | Production dispatch | Production dispatch |
+   | B2 | `cfvst` | `True` | 1 | `False` | Production dispatch | Production dispatch |
+   | B3 | `cfvst_kdb` | `True` | 2 | `False` | Production dispatch | Production dispatch |
+   | B4 | `cfvst_vpf` | `True` | 1 | `True` | Production dispatch | Production dispatch |
+   | B5 | `pipeline` | `True` | 2 | `True` | Production dispatch | Production dispatch |
+   | B6 | `pipeline_pad` | `True` | 2 | `True` | 4 | Production dispatch |
+   | B7 | `pipeline_pad_dsplit` | `True` | 2 | `True` | 4 | `True` |
 
-10. Compute one independent chunked FP32 causal GQA SDPA reference for the shared inputs.
-11. Before timing, initialize each output with NaNs, execute its kernel, synchronize, and validate against the FP32 reference using `torch.testing.assert_close` with `atol=1e-2` and `rtol=1e-2`.
-12. Record the maximum absolute and relative errors. Abort immediately if any validation fails.
+6. Assert that the A configuration disables the new pipeline and that production dispatch starts with the three new knobs disabled. Verify every successive B-stage change modifies exactly its advertised field(s), including resolved knob values.
+7. Check `supports_attention_dense` for all eight specifications. Require eight distinct compile-time kernel names; retain the original and rebuilt Step-0 winner names for auditing.
+8. Run the Python kernel emitter and compile **eight independent HSACOs** per shape (one for `A` and seven for B1–B7); record their kernel names, code-object hashes, and specifications. No runtime GPU-kernel variant-selection branch is used.
+9. Generate one shared BF16-rounded Q/K/V input set. Allocate a separate output buffer and construct a direct `KernelLauncher` plus `LaunchConfig` for each compiled kernel.
+10. Compute one independent **chunked NumPy FP32 causal GQA SDPA** reference from the shared BF16-rounded inputs. No PyTorch import or `torch.testing.assert_close` is used.
+11. **Before timing**, fill each output with `0xFF` bytes (NaN poison), invoke its kernel, synchronize, and compare **every output element** against the FP32 reference using `numpy.testing.assert_allclose(atol=1e-2, rtol=1e-2, equal_nan=False)`. Record maximum absolute and relative errors; abort on failure.
+12. Perform **10 round-robin warmup launches per variant**, then synchronize the HIP stream.
+13. Execute **five measurement rounds**, randomly shuffling the order of all eight variants within each round.
+14. For each variant in each round, record a HIP start event, make **50 direct `KernelLauncher` calls**, record a HIP end event, synchronize that event, and divide elapsed GPU-event time by 50 to obtain per-launch latency.
+15. After each timed batch, validate its final output against the same FP32 reference with the same tolerances, **outside the GPU-event timing interval**. Record errors and abort on failure. Validation checks the last output of each 50-launch batch, not all 50 intermediate outputs.
+16. Save the shape, variant, measurement round, randomized execution order, configuration knobs, latency, and correctness result. Preserve the resolved specs, kernel names, HSACO hashes, and environment provenance.
 
-13. Perform 10 round-robin warmup launches per kernel.
-14. Synchronize the GPU before measurement.
-15. Perform five measurement rounds, randomizing the order of the five variants in each round.
-16. For each variant in each round:
-    - Record a start GPU event.
-    - Execute 50 direct `KernelLauncher` calls.
-    - Record an end GPU event.
-    - Synchronize the end event.
-    - Divide elapsed GPU time by 50 to obtain average latency per launch.
-17. After each timed batch, validate its output against the same FP32 reference using `atol=1e-2` and `rtol=1e-2`.
-18. Perform post-batch validation outside the GPU-event timing interval, so correctness comparisons do not directly contribute to the reported GPU timing.
-19. Record the validation result, maximum errors, shape, variant, and measurement round. Abort if any post-batch validation fails.
+**Correctness coverage:** Each shape has eight initial checks and `8 × 5 = 40` post-batch checks, or **48 checks per shape**. Across eight shapes there are **384 checks** (64 initial and 320 post-batch).
 
-**Correctness coverage:** Each shape undergoes five initial correctness checks and 25 post-batch checks. Across 12 shapes, this gives **360 checks**. Post-batch validation checks the final output of each 50-launch batch, not every individual launch.
-
-20. Collect five round-level latency samples for each variant.
-21. Compute the median latency independently for each variant:
+17. Collect five per-round latency samples per variant and compute each variant's independent median:
 
     `T_variant = median(t_variant,1, ..., t_variant,5)`
 
-22. Compute same-session pairwise speedup ratios using these median latencies:
-    - `baseline / cfvst`
-    - `cfvst / cfvst_klds`
-    - `cfvst / cfvst_vpf`
-    - `cfvst_klds / cfvst_klds_vpf`
-    - `cfvst_vpf / cfvst_klds_vpf`
-    - `baseline / cfvst_klds_vpf`
-23. Calculate percentage latency reduction for each comparison:
+18. Use the shape-specific **Step-0 winner (`A`) as the reference denominator** for the main tables. For each candidate B2, B3, B4, B5, or B7, compute its speedup as:
 
-    `Reduction (%) = 100 × (1 - T_after / T_before)`
+    `Speedup_A_to_candidate = T_A / T_candidate`
 
-24. For the full-vs-baseline table, calculate the reduction separately for each matched measurement round:
+19. Compute the main percentage latency reduction **against `A`**, not against production dispatch:
 
-    `R_r = 100 × (1 - T_full,r / T_baseline,r)`
+    `Reduction_A_to_candidate (%) = 100 × (1 - T_candidate / T_A)`
 
-25. Report the minimum and maximum observed round-level reductions:
+20. For the five-column ablation table, report B2 (`CFVST`), B3 (`CFVST+KDB`), B4 (`CFVST+VPF`), B5 (`CFVST+KDB+VPF`), and B7 (`CFVST+KDB+VPF+LDS pad4+causal split`), **each compared directly with `A`**.
+21. For the final full-optimization table, compare only **B7 versus `A`**. Calculate the percentage reduction for each matched round:
 
-    `Min = min(R_1, R_2, R_3, R_4, R_5)`
+    `R_r = 100 × (1 - t_B7,r / t_A,r)`
 
+22. Report the observed same-round range:
+
+    `Min = min(R_1, R_2, R_3, R_4, R_5)`  
     `Max = max(R_1, R_2, R_3, R_4, R_5)`
 
-26. Report the main full-vs-baseline latency reduction using the ratio of the two median latencies, rather than the median of round-level reductions.
-27. Use the five configurations and pairwise comparisons to quantify the contributions of CFVST, K LDS double buffering (KDB), V register prefetching (VPF), and their combined effect.
+23. Report the central B7-vs-A reduction from the **ratio of the two medians**, not the median of the five round-level reductions.
+24. Independently calculate *within-B-stage* comparisons to isolate pipeline effects: `baseline → cfvst`, `cfvst → cfvst_kdb`, `cfvst → cfvst_vpf`, `cfvst_kdb → pipeline`, `cfvst_vpf → pipeline`, `pipeline → pipeline_pad`, and `pipeline_pad → pipeline_pad_dsplit`.
+25. Export `ablation_runs.csv`, `ablation_summary.csv`, `ablation_ratios.csv`, `ablation_comparison.csv`, `ablation_comparison.md`, `A_vs_B7.csv`, `validation.csv`, `resolved_specs.json`, and `provenance.json` for reproduction and review.
+
+**Interpretation:** `A` and B1–B7 are measured within the same session and compiled from the same current source, so direct **Step-0-winner-versus-optimized-production** comparisons are valid. However, the B stages **do not inherit `A`'s geometry or scheduling knobs**: the results do **not** quantify the incremental benefit of adding CFVST/KDB/VPF on top of the Step-0 winner itself. The eight persistent shapes exclude the four nonpersistent B=1, S=1024/2048 cases.
 
 #### Benchmark Environment and Provenance
-
-The five-way ablation was measured on gfx942 with 304 CUs, using 12 BF16 D128 causal prefill configurations. The baseline for each shape was resolved from production dispatch. All five configurations were compiled and measured in the same process using identical inputs and the same HIP stream.
 
 | Component | Configuration |
 | :--- | :--- |
 | Hardware target | gfx942, 304 CUs |
-| Benchmarked source HEAD | `76935189336d51bccf6164af7b8d2ce9a2be13f7` |
-| Kernel source SHA-256 | `a1964d6e2ed5dfb3173c472d02f1726e49af95c9161522a678aedcd70bbade5d` |
-| Benchmark harness SHA-256 | `ee8d91c3bad2299cd43e7fbaf77c1cfec6e29318d27ac3bac3c71ddef4eb176e` |
+| Benchmarked source HEAD | `74fec8a4c863d0a6362f647e0fc203feecfb1451` |
+| Kernel source SHA-256 | `fcade13e9212e3e6c7c50018996c7c19bfe92eaa973808ed97800c75aa057d80` |
+| Benchmark harness SHA-256 | `343a65ea3e06eaaa37c4841920047449a55d67f10387b28bf359fa8ebe1c87ea` |
 | ROCm stack | 10.0.0 |
-| HIP | 7.15.26333 |
-| Python | 3.12.3 |
-| PyTorch | `2.13.0+rocm10.0.0` |
+| HIP | `7.15.26333` |
+| Python | `3.12.3` |
 | Triton | `3.8.0+git4cff872c.rocm10.0.0` |
 | ROCKE compiler backend | Python |
 | LLVM flavor | `llvm23` |
-
-**Correctness:** Each variant was validated against the same FP32 reference before measurement and after every timed batch. All validations passed. Post-batch checks cover the final output after 50 launches, not each individual launch.
 
 #### Shape-by-shape default kernel identity built by `attention_tuning_spec(req, "gfx942_dense").kernel_spec`
 
@@ -337,7 +280,7 @@ The five-way ablation was measured on gfx942 with 304 CUs, using 12 BF16 D128 ca
 | bf16 | 16 | 4096 | 32 | 16 | 128 | `rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2` | `true` | `true` | `qb_major` | `[304, 1, 1]` | `[512, 1, 1]` |
 | bf16 | 16 | 8192 | 32 | 8 | 128 | `rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe2` | `true` | `true` | `hkv_major` | `[304, 1, 1]` | `[512, 1, 1]` |
 
-**Benchmark harness:** `library/benchmarks/gfx942/attention/prefill/bench_rocke_5way_specs.py`
+**Benchmark harness:** `library/benchmarks/gfx942/attention/prefill/bench_rocke_7way_specs.py`
 
 **Kernel source:** `library/kernels/gfx942/attention_dense.py`
 
@@ -449,69 +392,36 @@ export ROCKE_LLVM_FLAVOR=llvm23
 export PYTHONPATH="$PWD/platform/python:$PWD/library:$PWD"
 
 /root/gpu-bench/venvs/rocke/bin/python \
-  library/benchmarks/gfx942/attention/prefill/bench_rocke_5way_specs.py \
+  library/benchmarks/gfx942/attention/prefill/bench_rocke_7way_specs.py \
   --warmup 10 \
   --rounds 5 \
   --repeat 50 \
   --atol 1e-2 \
   --rtol 1e-2 \
-  --out-dir /root/gpu-bench/rocke_5way_specs_results
+  --out-dir /root/gpu-bench/rocke_7way_specs_results
 
 ```
 
-Results are written to `/root/gpu-bench/rocke_5way_specs_results`
+Results are written to `/root/gpu-bench/rocke_7way_specs_results`
 when using the `--out-dir` argument shown above. When omitted,
 the benchmark uses the default directory configured in
-`bench_rocke_5way_specs.py`.
+`bench_rocke_7way_specs.py`.
 
 ### Global-Memory Coalescing and ISA Verification (§R.5)
 
-The CFVST, K LDS double-buffering (KDB), and V register-prefetching (VPF) optimizations change K/V load scheduling and LDS layout. We verified that the affected global-memory accesses remain coalesced using `vector_transactions`, `addr_fn_from_strides`, and `analyze_coalescing(..., line_bytes=line_bytes_for("gfx942"))`. Emitted load widths were checked using `assert_asm_backed`.
+Verified on **gfx942**, BF16 D128 causal attention, BM256/BN64, persistent-304, using LLVM20 and LLVM23.
 
-**Configuration:** MI300X (`gfx942`, 304 CUs), BF16 causal prefill, B=1, S=4096, Hq=32, Hkv=8, D=128, BM=256, BN=64, persistent-304, CFVST+KDB+VPF enabled.
-
-#### Coalescing results
-
-| Global access | Modeled positions | Fully coalesced | Lines/instruction | Footprint | Ideal / emitted width |
+| Global access | Modeled positions | Coalesced | Cache lines | Footprint | ISA |
 |---|---:|---|---:|---:|---|
-| K async → LDS | 64 | Yes | 2 | 1.0× | 2 BF16 / 32-bit |
-| V CFVST x0 | 32 | Yes | 2 | 1.0× | 2 BF16 / 32-bit |
-| V CFVST x1 | 32 | Yes | 2 | 1.0× | 2 BF16 / 32-bit |
+| K async → LDS | 64 | Yes | 2 | 1.0× | 32-bit |
+| V CFVST x0 | 32 | Yes | 2 | 1.0× | 32-bit |
+| V CFVST x1 | 32 | Yes | 2 | 1.0× | 32-bit |
 
-**`CoalescingReport.summary()`** (same for all three):
+`vector_transactions`, `addr_fn_from_strides`, `analyze_coalescing`, and `CoalescingReport.summary()` confirmed fully coalesced accesses using `line_bytes_for("gfx942") = 128`. **All `assert_asm_backed` checks passed** across six compiled HSACOs.
 
-`load [token stride 1024, head_dim stride 1]: contiguous axis = head_dim; 1 instr, VW=2 elems (b128-ideal), lines/instr 2..2 (128B lines), footprint 1x, FULLY COALESCED`
+ISA inspection confirmed separate V x0/x1 loads and their **2048-byte token-stride difference** under both LLVM20 and LLVM23.
 
-Each wave-wide load transfers 64 × 4 = 256 bytes across exactly two 128-byte cache lines. All modeled positions are fully coalesced with no excess cache-line footprint.
-
-#### Assembly verification
-
-| Access | ISA PC | Instruction |
-|---|---|---|
-| K → LDS | `0x3B60` | `buffer_load_dword ... lds` |
-| V x0 | `0x3BB8` | `buffer_load_dword v3, v1, s[28:31], 0 offen` |
-| V x1 | `0x3BC0` | `buffer_load_dword v4, v2, s[28:31], 0 offen` |
-
-All three emitted loads are 32-bit, matching the predicted two BF16 elements per lane. **All assembly-backed width checks passed.**
-
-ISA address analysis also verified the first V x0/x1 pair:
-
-- `s9 = Hkv = 8`
-- `s24 = s9 << 7 = 1024` BF16 elements
-- The two V offsets differ by `s24`, corresponding to **2048 bytes**, exactly one KV token stride.
-
-#### Provenance
-
-| Field | Value |
-|---|---|
-| Verification commit | `4f5491069dfda53238977f64e8163165f459af36` |
-| HSACO SHA-256 | `e3d2f9feda7b5da03b2e1dd5a70129fa872160644faca4f442c5b974ddb1facc` |
-| Disassembler | AMD LLVM `24.0.0git` |
-| LLVM Flavor | llvm23 |
-
-The two revisions have no identified active K/V load implementation changes, although binary equivalence has not been established. The recorded LLVM version identifies the disassembler, not necessarily the compilation flavor.
-
-**Conclusion:** K and V global loads remain fully coalesced, with a 1.0× cache-line footprint and emitted widths matching static predictions. No global-memory coalescing regression was identified for the verified CFVST+KDB+VPF configuration.
+**Result:** No modeled global-memory coalescing regression in the verified configurations. Evidence covers the tested K/V access paths, not every tuning configuration.
 
 
 ## Runbook and Architecture Compliance
