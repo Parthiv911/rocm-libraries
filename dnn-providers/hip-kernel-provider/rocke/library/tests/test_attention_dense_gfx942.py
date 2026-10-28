@@ -1132,11 +1132,21 @@ def test_cfvst_kdb_vpf_pipeline_requires_persistent(overrides):
         ({}, 34816),  # naive V, K[1, 64, 136] + V[1, 64, 136]
         ({"use_cfvst": True}, 33792),  # K[1, 64, 136] + V^T[128, 64]
         (
-            {"use_cfvst": True, "lds_num_buffers": 2, "persistent": True, "num_persistent": 304},
+            {
+                "use_cfvst": True,
+                "lds_num_buffers": 2,
+                "persistent": True,
+                "num_persistent": 304,
+            },
             51200,
         ),
         (
-            {"use_cfvst": True, "v_reg_prefetch": True, "persistent": True, "num_persistent": 304},
+            {
+                "use_cfvst": True,
+                "v_reg_prefetch": True,
+                "persistent": True,
+                "num_persistent": 304,
+            },
             33792,
         ),
         (
@@ -1209,9 +1219,7 @@ def test_cfvst_kdb_vpf_lds_budgets(overrides, expected_bytes):
         "vpf-none",
     ],
 )
-def test_cfvst_kdb_vpf_knobs_reject_non_exact_types(
-    overrides, expected_message
-):
+def test_cfvst_kdb_vpf_knobs_reject_non_exact_types(overrides, expected_message):
     """Invalid knob types must raise parameter-specific ValueErrors."""
     with pytest.raises(ValueError) as exc_info:
         _spec(**overrides)
@@ -1451,8 +1459,12 @@ _CONTRACT_GRID = [
     # --- private: performance-only codegen knobs ---
     dict(lds_num_buffers=1),  # accepted: upstream single K buffer
     dict(lds_num_buffers=2),  # REJECTED: BF16 without CFVST
-    dict(use_cfvst=True, lds_num_buffers=2, persistent=True, num_persistent=304),  # ACCEPTED: KDB alone
-    dict(use_cfvst=True, v_reg_prefetch=True, persistent=True, num_persistent=304),  # ACCEPTED: VPF alone
+    dict(
+        use_cfvst=True, lds_num_buffers=2, persistent=True, num_persistent=304
+    ),  # ACCEPTED: KDB alone
+    dict(
+        use_cfvst=True, v_reg_prefetch=True, persistent=True, num_persistent=304
+    ),  # ACCEPTED: VPF alone
     dict(
         use_cfvst=True,
         lds_num_buffers=2,

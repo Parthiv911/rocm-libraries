@@ -101,15 +101,19 @@ STAGE_OVERRIDES = {
     "cfvst_vpf": {"use_cfvst": True, "v_reg_prefetch": True},
     "pipeline": {"use_cfvst": True, "lds_num_buffers": 2, "v_reg_prefetch": True},
     "pipeline_pad": {
-        "use_cfvst": True, "lds_num_buffers": 2, "v_reg_prefetch": True,
+        "use_cfvst": True,
+        "lds_num_buffers": 2,
+        "v_reg_prefetch": True,
         "lds_row_pad": 4,
     },
     "pipeline_pad_dsplit": {
-        "use_cfvst": True, "lds_num_buffers": 2, "v_reg_prefetch": True,
-        "lds_row_pad": 4, "causal_diag_split": True,
+        "use_cfvst": True,
+        "lds_num_buffers": 2,
+        "v_reg_prefetch": True,
+        "lds_row_pad": 4,
+        "causal_diag_split": True,
     },
 }
-
 
 
 # Step-0 winners from the supplied 12-row final A/B table. These values
@@ -123,77 +127,113 @@ STAGE_OVERRIDES = {
 # All entries come from the user-supplied twelve-row winner table.
 
 WINNING_LEVERS = {
-
-    (1, 1024, 8): dict(block_m=128, block_n=32, waves_per_eu=4,
-
-                       lds_row_pad=4, use_exp2_fast=True, causal_diag_split=True),
-
-    (1, 1024, 16): dict(block_m=128, block_n=32, waves_per_eu=4,
-
-                        lds_row_pad=4, use_exp2_fast=True, causal_diag_split=True),
-
-    (1, 2048, 8): dict(block_m=128, block_n=32, waves_per_eu=4,
-
-                       lds_row_pad=4, use_exp2_fast=True, pv_loop_order="k_major",
-
-                       causal_diag_split=True),
-
-    (1, 2048, 16): dict(block_m=128, block_n=32, waves_per_eu=4,
-
-                        lds_row_pad=4, use_exp2_fast=True, pv_loop_order="k_major",
-
-                        causal_diag_split=True),
-
-    (1, 4096, 8): dict(waves_per_eu=3, lds_row_pad=4, iglp=True,
-
-                       iglp_mode=1, pv_loop_order="k_major", pv_priority=1,
-
-                       causal_diag_split=True),
-
-    (1, 4096, 16): dict(waves_per_eu=2, lds_row_pad=4, iglp=True,
-
-                        iglp_mode=1, pv_loop_order="k_major", pv_priority=2,
-
-                        causal_diag_split=True),
-
-    (1, 8192, 8): dict(waves_per_eu=2, lds_row_pad=4, iglp=True,
-
-                       iglp_mode=1, pv_loop_order="k_major", pv_priority=2,
-
-                       causal_diag_split=True),
-
-    (1, 8192, 16): dict(waves_per_eu=3, lds_row_pad=4, iglp=True,
-
-                        iglp_mode=1, pv_loop_order="k_major", pv_priority=3,
-
-                        causal_diag_split=True),
-
-    (1, 16384, 8): dict(waves_per_eu=2, lds_row_pad=4, iglp=True,
-
-                        iglp_mode=1, pv_loop_order="k_major", pv_priority=1,
-
-                        causal_diag_split=True),
-
-    (16, 4096, 8): dict(waves_per_eu=1, lds_row_pad=4, iglp=True,
-
-                        iglp_mode=1, pv_loop_order="k_major", pv_priority=3,
-
-                        causal_diag_split=True),
-
-    (16, 4096, 16): dict(waves_per_eu=1, lds_row_pad=4, iglp=True,
-
-                         iglp_mode=1, pv_loop_order="k_major", pv_priority=2,
-
-                         causal_diag_split=True),
-
-    (16, 8192, 8): dict(waves_per_eu=3, lds_row_pad=4, iglp=True,
-
-                        iglp_mode=1, pv_loop_order="k_major", pv_priority=1,
-
-                        causal_diag_split=True),
-
+    (1, 1024, 8): dict(
+        block_m=128,
+        block_n=32,
+        waves_per_eu=4,
+        lds_row_pad=4,
+        use_exp2_fast=True,
+        causal_diag_split=True,
+    ),
+    (1, 1024, 16): dict(
+        block_m=128,
+        block_n=32,
+        waves_per_eu=4,
+        lds_row_pad=4,
+        use_exp2_fast=True,
+        causal_diag_split=True,
+    ),
+    (1, 2048, 8): dict(
+        block_m=128,
+        block_n=32,
+        waves_per_eu=4,
+        lds_row_pad=4,
+        use_exp2_fast=True,
+        pv_loop_order="k_major",
+        causal_diag_split=True,
+    ),
+    (1, 2048, 16): dict(
+        block_m=128,
+        block_n=32,
+        waves_per_eu=4,
+        lds_row_pad=4,
+        use_exp2_fast=True,
+        pv_loop_order="k_major",
+        causal_diag_split=True,
+    ),
+    (1, 4096, 8): dict(
+        waves_per_eu=3,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=1,
+        causal_diag_split=True,
+    ),
+    (1, 4096, 16): dict(
+        waves_per_eu=2,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=2,
+        causal_diag_split=True,
+    ),
+    (1, 8192, 8): dict(
+        waves_per_eu=2,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=2,
+        causal_diag_split=True,
+    ),
+    (1, 8192, 16): dict(
+        waves_per_eu=3,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=3,
+        causal_diag_split=True,
+    ),
+    (1, 16384, 8): dict(
+        waves_per_eu=2,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=1,
+        causal_diag_split=True,
+    ),
+    (16, 4096, 8): dict(
+        waves_per_eu=1,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=3,
+        causal_diag_split=True,
+    ),
+    (16, 4096, 16): dict(
+        waves_per_eu=1,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=2,
+        causal_diag_split=True,
+    ),
+    (16, 8192, 8): dict(
+        waves_per_eu=3,
+        lds_row_pad=4,
+        iglp=True,
+        iglp_mode=1,
+        pv_loop_order="k_major",
+        pv_priority=1,
+        causal_diag_split=True,
+    ),
 }
-
 
 
 # Auditing only: current source may rename a kernel without changing its knobs.
@@ -201,33 +241,67 @@ WINNING_LEVERS = {
 # The script warns (and records both symbols) rather than rejecting a new HEAD.
 
 EXPECTED_A_KERNEL = {
-
-    (1, 1024, 8): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_dsplit",
-
-    (1, 1024, 16): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_dsplit",
-
-    (1, 2048, 8): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_pvkmaj_dsplit",
-
-    (1, 2048, 16): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_pvkmaj_dsplit",
-
-    (1, 4096, 8): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_iglp1_iglpm1_pvkmaj_prio1_dsplit",
-
-    (1, 4096, 16): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_iglp1_iglpm1_pvkmaj_prio2_dsplit",
-
-    (1, 8192, 8): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_iglp1_iglpm1_pvkmaj_prio2_dsplit",
-
-    (1, 8192, 16): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_iglp1_iglpm1_pvkmaj_prio3_dsplit",
-
-    (1, 16384, 8): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_iglp1_iglpm1_pvkmaj_prio1_dsplit",
-
-    (16, 4096, 8): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4_iglp1_iglpm1_pvkmaj_prio3_dsplit",
-
-    (16, 4096, 16): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_iglp1_iglpm1_pvkmaj_prio2_dsplit",
-
-    (16, 8192, 8): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4_iglp1_iglpm1_pvkmaj_prio1_dsplit",
-
+    (
+        1,
+        1024,
+        8,
+    ): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_dsplit",
+    (
+        1,
+        1024,
+        16,
+    ): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_dsplit",
+    (
+        1,
+        2048,
+        8,
+    ): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_pvkmaj_dsplit",
+    (
+        1,
+        2048,
+        16,
+    ): "rocke_attention_dense_d128_bn32_bf16_bm128_causal_lazyrs_gfx942_wpe4_krowpad4_e2f1_pvkmaj_dsplit",
+    (
+        1,
+        4096,
+        8,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_iglp1_iglpm1_pvkmaj_prio1_dsplit",
+    (
+        1,
+        4096,
+        16,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_iglp1_iglpm1_pvkmaj_prio2_dsplit",
+    (
+        1,
+        8192,
+        8,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_iglp1_iglpm1_pvkmaj_prio2_dsplit",
+    (
+        1,
+        8192,
+        16,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe3_krowpad4_iglp1_iglpm1_pvkmaj_prio3_dsplit",
+    (
+        1,
+        16384,
+        8,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe2_krowpad4_iglp1_iglpm1_pvkmaj_prio1_dsplit",
+    (
+        16,
+        4096,
+        8,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe1_krowpad4_iglp1_iglpm1_pvkmaj_prio3_dsplit",
+    (
+        16,
+        4096,
+        16,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_gfx942_wpe1_krowpad4_iglp1_iglpm1_pvkmaj_prio2_dsplit",
+    (
+        16,
+        8192,
+        8,
+    ): "rocke_attention_dense_d128_bn64_bf16_causal_lazyrs_persist304_hkvmaj_gfx942_wpe3_krowpad4_iglp1_iglpm1_pvkmaj_prio1_dsplit",
 }
-
 
 
 # Anchor A to the original sweep's NON-new-pipeline values rather than
@@ -235,73 +309,47 @@ EXPECTED_A_KERNEL = {
 # inheriting potentially changed policies in the current dispatch.
 
 A_COMMON = dict(
-
     block_m=256,
-
     block_n=64,
-
     lds_row_pad=4,
-
     lds_k_group_pad=8,
-
     use_exp2_fast=True,
-
     iglp=False,
-
     iglp_mode=0,
-
     pv_loop_order="d_major",
-
     pv_priority=0,
-
     pv_sched_fence_mask=None,
-
     o_store_width=4,
-
     causal_diag_split=True,
-
     interleave=False,
-
     lazy_rescale=True,
-
     emit_lse=False,
-
     use_cfvst=False,
-
     lds_num_buffers=1,
-
     v_reg_prefetch=False,
-
 )
 
 
-
-
-
 def original_grid_overrides(shape: "Shape") -> dict:
-
     """Pin A's original default/304-CTA and qb-/hkv-major layouts."""
 
     if shape.batch == 1 and shape.seqlen <= 2048:
 
-        return dict(persistent=False, num_persistent=304,
+        return dict(
+            persistent=False,
+            num_persistent=304,
+            persist_decode="auto",
+            nonpersist_decode="qb_minor",
+        )
 
-                    persist_decode="auto", nonpersist_decode="qb_minor")
+    persist_decode = "hkv_major" if shape.batch == 16 and shape.hkv == 8 else "qb_major"
 
-    persist_decode = (
-
-        "hkv_major" if shape.batch == 16 and shape.hkv == 8 else "qb_major"
-
+    return dict(
+        persistent=True,
+        num_persistent=304,
+        persist_decode=persist_decode,
+        nonpersist_decode="auto",
     )
-
-    return dict(persistent=True, num_persistent=304,
-
-                persist_decode=persist_decode, nonpersist_decode="auto")
-
-
-
-
-
 
 
 # speedup = median(numerator)/median(denominator)
@@ -325,14 +373,14 @@ COMPARISON_PAIRS = (
 )
 EFFECT_NAMES = tuple(effect for _, _, effect in COMPARISON_PAIRS)
 
+
 def changed_fields(before, after) -> set[str]:
     """Confirm cumulative stages differ only in their advertised knobs."""
     b, a = asdict(before), asdict(after)
     return {key for key in b if b[key] != a[key]}
 
+
 @dataclass(frozen=True)
-
-
 class Shape:
     batch: int
     seqlen: int
@@ -365,6 +413,7 @@ DEFAULT_SHAPES = (
     Shape(16, 8192, 32, 8, 128, "bf16"),
 )
 
+
 def parse_shape(value: str) -> Shape:
     try:
         parts = [s.strip() for s in value.split(",")]
@@ -389,6 +438,7 @@ def parse_shape(value: str) -> Shape:
         )
     return Shape(b, s, hq, hkv, d, dtype)
 
+
 def locate_rocke(explicit: str | None) -> Path:
     starts = []
     if explicit:
@@ -401,10 +451,12 @@ def locate_rocke(explicit: str | None) -> Path:
                     return candidate.resolve()
     raise SystemExit("ROCKE root not found: pass --rocke-root")
 
+
 def add_module_paths(rocke: Path) -> None:
     for p in (rocke / "library", rocke / "platform/python", rocke):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
+
 
 def fp32_reference(q, k, v, *, scale: float, chunk: int):
     """Chunked causal GQA SDPA in NumPy FP32 over the exact BF16 inputs.
@@ -433,7 +485,9 @@ def fp32_reference(q, k, v, *, scale: float, chunk: int):
                 scores -= np.max(scores, axis=-1, keepdims=True)
                 np.exp(scores, out=scores)
                 scores /= np.sum(scores, axis=-1, keepdims=True)
-                result[b, qs:qe, first:last, :] = np.matmul(scores, val).transpose(1, 0, 2)
+                result[b, qs:qe, first:last, :] = np.matmul(scores, val).transpose(
+                    1, 0, 2
+                )
     return result
 
 
@@ -442,7 +496,9 @@ def validate(actual_bits, reference, *, atol: float, rtol: float, chunk: int = 2
     from rocke.numeric.bf16 import bf16_to_f32
 
     if actual_bits.shape != reference.shape:
-        raise AssertionError(f"output shape {actual_bits.shape} != reference {reference.shape}")
+        raise AssertionError(
+            f"output shape {actual_bits.shape} != reference {reference.shape}"
+        )
     if not np.isfinite(reference).all():
         raise AssertionError("FP32 reference contains nonfinite values")
     max_abs = 0.0
@@ -452,13 +508,14 @@ def validate(actual_bits, reference, *, atol: float, rtol: float, chunk: int = 2
             sl = slice(qs, qs + chunk)
             actual32 = bf16_to_f32(actual_bits[b, sl])
             expected = reference[b, sl]
-            np.testing.assert_allclose(actual32, expected, atol=atol, rtol=rtol,
-                                       equal_nan=False)
+            np.testing.assert_allclose(
+                actual32, expected, atol=atol, rtol=rtol, equal_nan=False
+            )
             diff = np.abs(actual32 - expected)
             max_abs = max(max_abs, float(diff.max()))
-            max_rel = max(max_rel, float(
-                (diff / np.maximum(np.abs(expected), 1e-6)).max()
-            ))
+            max_rel = max(
+                max_rel, float((diff / np.maximum(np.abs(expected), 1e-6)).max())
+            )
     return max_abs, max_rel
 
 
@@ -539,6 +596,7 @@ def write_csv(path: Path, columns: tuple[str, ...], rows: list[dict]) -> None:
         writer.writeheader()
         writer.writerows(rows)
 
+
 def _command_output(cmd: list[str], *, cwd: Path | None = None) -> str | None:
     try:
         return subprocess.check_output(
@@ -547,11 +605,13 @@ def _command_output(cmd: list[str], *, cwd: Path | None = None) -> str | None:
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
 
+
 def _package_version(package: str) -> str | None:
     try:
         return importlib_metadata.version(package)
     except importlib_metadata.PackageNotFoundError:
         return None
+
 
 def _git_provenance(root: Path) -> dict:
     repo = _command_output(["git", "rev-parse", "--show-toplevel"], cwd=root)
@@ -567,6 +627,7 @@ def _git_provenance(root: Path) -> dict:
         "working_tree_dirty": None if status is None else bool(status),
     }
 
+
 def _capture_git_checkout(root: Path) -> dict:
     """Record Git provenance; do NOT block dirty/untracked/unknown checkout."""
     state = _git_provenance(root)
@@ -577,12 +638,14 @@ def _capture_git_checkout(root: Path) -> dict:
     )
     return state
 
+
 def _file_sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
 
 def _loaded_hip_runtime_info() -> dict:
     """Identify the HIP runtime actually used by rocKE, without loading another.
@@ -658,6 +721,7 @@ _ROCM_SHARED_OBJECT = re.compile(
     flags=re.IGNORECASE,
 )
 
+
 def _rocm_sdk_package_versions() -> dict[str, str]:
     """Installed ROCm wheel metadata, not a claim about loaded DSOs."""
     distributions = (
@@ -675,6 +739,7 @@ def _rocm_sdk_package_versions() -> dict[str, str]:
         for name in distributions
         if (version := _package_version(name)) is not None
     }
+
 
 def _loaded_rocm_shared_objects() -> list[dict]:
     """Actual ROCm shared objects mapped into THIS running Linux process.
@@ -708,6 +773,7 @@ def _loaded_rocm_shared_objects() -> list[dict]:
     except OSError as exc:
         raise RuntimeError("Cannot inspect /proc/self/maps for ROCm libraries") from exc
     return sorted(found.values(), key=lambda r: (r["name"], r["mapped_path"]))
+
 
 def _environment(
     device_id: int, rocke: Path, script_file: Path, git_state: dict
@@ -772,6 +838,7 @@ def _environment(
         },
     }
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -824,9 +891,13 @@ def main() -> int:
         raise SystemExit(
             f"Loaded wrong emitter! expected {expected_file}, got {source_file}"
         )
-    needed_knobs = {knob for overrides in STAGE_OVERRIDES.values() for knob in overrides}
+    needed_knobs = {
+        knob for overrides in STAGE_OVERRIDES.values() for knob in overrides
+    }
     needed_knobs.update(A_COMMON)
-    needed_knobs.update({"persistent", "num_persistent", "persist_decode", "nonpersist_decode"})
+    needed_knobs.update(
+        {"persistent", "num_persistent", "persist_decode", "nonpersist_decode"}
+    )
     for overrides in WINNING_LEVERS.values():
         needed_knobs.update(overrides)
     for knob in sorted(needed_knobs):
@@ -847,9 +918,7 @@ def main() -> int:
     device_id = current_device()
     if get_device_arch(device_id) != "gfx942":
         raise SystemExit("This benchmark requires a gfx942 GPU")
-    environment = _environment(
-        device_id, rocke, Path(__file__).resolve(), measured_git
-    )
+    environment = _environment(device_id, rocke, Path(__file__).resolve(), measured_git)
     hip_runtime = environment["software"]["hip_runtime"]
     print(
         f"ROCKE_ROOT={rocke} | GPU={environment['gpu']['name']} "
@@ -920,7 +989,7 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
         # compiled on the current emitter. B1-B7 = current production + only
         # the explicit new-pipeline/pad/split overrides (no sweep-lever overlay).
         key = (shape.batch, shape.seqlen, shape.hkv)
-        a_overrides = (A_COMMON | original_grid_overrides(shape) | WINNING_LEVERS[key])
+        a_overrides = A_COMMON | original_grid_overrides(shape) | WINNING_LEVERS[key]
         specs = {"A": replace(production, **a_overrides), "baseline": production}
         for name in B_VARIANTS[1:]:
             specs[name] = replace(production, **STAGE_OVERRIDES[name])
@@ -935,14 +1004,18 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
                 f"    current ={actual_a_name}",
                 flush=True,
             )
-        if (specs["A"].resolved_use_cfvst()
-                or specs["A"].lds_num_buffers != 1
-                or specs["A"].v_reg_prefetch):
+        if (
+            specs["A"].resolved_use_cfvst()
+            or specs["A"].lds_num_buffers != 1
+            or specs["A"].v_reg_prefetch
+        ):
             raise RuntimeError(f"{shape.label}: A unexpectedly enables CFVST/KDB/VPF")
 
-        if (production.resolved_use_cfvst()
-                or production.lds_num_buffers != 1
-                or production.v_reg_prefetch):
+        if (
+            production.resolved_use_cfvst()
+            or production.lds_num_buffers != 1
+            or production.v_reg_prefetch
+        ):
             raise RuntimeError(
                 f"{shape.label}: production dispatch already enables some "
                 "CFVST/KDB/VPF pipeline knobs. Cannot label it a clean baseline."
@@ -1065,7 +1138,9 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
         configurations = {}
         values = {}
         compiled_artifacts = {}
-        print(f"  Compiling {len(VARIANTS)} variants independently and saving HSACOs...")
+        print(
+            f"  Compiling {len(VARIANTS)} variants independently and saving HSACOs..."
+        )
         for name in VARIANTS:
             spec = specs[name]
             artifact = compile_kernel(
@@ -1109,8 +1184,11 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
         resolved_rows[-1]["compiled_artifacts"] = compiled_artifacts
         print("Building one chunked FP32 NumPy SDPA reference...")
         reference = fp32_reference(
-            bf16_to_f32(q_bits), bf16_to_f32(k_bits), bf16_to_f32(v_bits),
-            scale=scale, chunk=args.reference_chunk,
+            bf16_to_f32(q_bits),
+            bf16_to_f32(k_bits),
+            bf16_to_f32(v_bits),
+            scale=scale,
+            chunk=args.reference_chunk,
         )
         del q_bits, k_bits, v_bits
 
@@ -1167,8 +1245,11 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
             print(f"Round {round_id}: {shuffled}")
             for position, name in enumerate(shuffled, 1):
                 ms = timed_batch(
-                    launchers[name], values[name], configurations[name],
-                    stream_ptr, args.repeat,
+                    launchers[name],
+                    values[name],
+                    configurations[name],
+                    stream_ptr,
+                    args.repeat,
                 )
                 # Timed events have already synchronized. Only the last output
                 # of this batch survives; validate it outside the timed window.
@@ -1211,7 +1292,8 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
                     parent_variant=PARENT_VARIANT[name] or "",
                     speedup_vs_parent=(
                         f"{median[PARENT_VARIANT[name]]/x:.9f}"
-                        if PARENT_VARIANT[name] is not None else "1.000000000"
+                        if PARENT_VARIANT[name] is not None
+                        else "1.000000000"
                     ),
                     stage=STAGE_NUMBERS[name],
                     description=STAGE_DESCRIPTIONS[name],
@@ -1240,17 +1322,25 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
             )
             ratio_rows.append(metrics)
             pair_metrics[effect] = metrics
-        comparison_rows.append({
-            "batch": shape.batch,
-            "seqlen": shape.seqlen,
-            "hkv": shape.hkv,
-            **{f"{name}_kernel": names[name] for name in VARIANTS},
-            **{f"{name}_median_ms": f"{median[name]:.9f}" for name in VARIANTS},
-            **{f"{effect}_speedup": pair_metrics[effect]["speedup"]
-               for effect in EFFECT_NAMES},
-            **{f"{effect}_reduction_pct": pair_metrics[effect]["latency_reduction_pct"]
-               for effect in EFFECT_NAMES},
-        })
+        comparison_rows.append(
+            {
+                "batch": shape.batch,
+                "seqlen": shape.seqlen,
+                "hkv": shape.hkv,
+                **{f"{name}_kernel": names[name] for name in VARIANTS},
+                **{f"{name}_median_ms": f"{median[name]:.9f}" for name in VARIANTS},
+                **{
+                    f"{effect}_speedup": pair_metrics[effect]["speedup"]
+                    for effect in EFFECT_NAMES
+                },
+                **{
+                    f"{effect}_reduction_pct": pair_metrics[effect][
+                        "latency_reduction_pct"
+                    ]
+                    for effect in EFFECT_NAMES
+                },
+            }
+        )
         print("  Incremental, branch-specific and cumulative results:", flush=True)
         for effect in EFFECT_NAMES:
             r = pair_metrics[effect]
@@ -1271,9 +1361,12 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
         (
             "ablation_comparison.csv",
             "batch seqlen hkv "
-            + " ".join(f"{name}_kernel" for name in VARIANTS) + " "
-            + " ".join(f"{name}_median_ms" for name in VARIANTS) + " "
-            + " ".join(f"{effect}_speedup" for effect in EFFECT_NAMES) + " "
+            + " ".join(f"{name}_kernel" for name in VARIANTS)
+            + " "
+            + " ".join(f"{name}_median_ms" for name in VARIANTS)
+            + " "
+            + " ".join(f"{effect}_speedup" for effect in EFFECT_NAMES)
+            + " "
             + " ".join(f"{effect}_reduction_pct" for effect in EFFECT_NAMES),
             comparison_rows,
         ),
@@ -1309,9 +1402,11 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
 
     def fmt(r, effect):
         x = r[effect]
-        return (f"{float(x['speedup']):.5f}x "
-                f"[{float(x['paired_min']):.5f}, "
-                f"{float(x['paired_max']):.5f}]")
+        return (
+            f"{float(x['speedup']):.5f}x "
+            f"[{float(x['paired_min']):.5f}, "
+            f"{float(x['paired_max']):.5f}]"
+        )
 
     lines = [
         "# A (Step-0 winner) versus B1-B7 BF16 D128 gfx942 ablation",
@@ -1327,9 +1422,12 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
     ]
     for name in VARIANTS:
         overrides = STAGE_OVERRIDES[name]
-        knobs = ("Shape-specific existing-lever winner (see resolved_specs.json)"
-                 if name == "A" else
-                 ", ".join(f"`{k}={v}`" for k, v in overrides.items()) or "Production dispatch")
+        knobs = (
+            "Shape-specific existing-lever winner (see resolved_specs.json)"
+            if name == "A"
+            else ", ".join(f"`{k}={v}`" for k, v in overrides.items())
+            or "Production dispatch"
+        )
         parent = PARENT_VARIANT[name] or "—"
         lines.append(f"| {STAGE_NUMBERS[name]} | `{name}` | {knobs} | `{parent}` |")
     lines += [
@@ -1341,8 +1439,11 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
     for sh in shapes:
         r = ratios_by_shape[sh.label]
         effects = tuple(f"A_vs_{name}" for name in B_VARIANTS)
-        lines.append(f"| {sh.batch} | {sh.seqlen} | {sh.hkv} | "
-                     + " | ".join(fmt(r, effect) for effect in effects) + " |")
+        lines.append(
+            f"| {sh.batch} | {sh.seqlen} | {sh.hkv} | "
+            + " | ".join(fmt(r, effect) for effect in effects)
+            + " |"
+        )
     lines += [
         "",
         "## Direct B ablations (production baseline / CFVST anchor)",
@@ -1351,10 +1452,18 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
     ]
     for sh in shapes:
         r = ratios_by_shape[sh.label]
-        effects = ("cfvst_only", "kdb_given_cfvst", "vpf_given_cfvst",
-                   "vpf_given_cfvst_kdb", "kdb_given_cfvst_vpf")
-        lines.append(f"| {sh.batch} | {sh.seqlen} | {sh.hkv} | "
-                     + " | ".join(fmt(r, effect) for effect in effects) + " |")
+        effects = (
+            "cfvst_only",
+            "kdb_given_cfvst",
+            "vpf_given_cfvst",
+            "vpf_given_cfvst_kdb",
+            "kdb_given_cfvst_vpf",
+        )
+        lines.append(
+            f"| {sh.batch} | {sh.seqlen} | {sh.hkv} | "
+            + " | ".join(fmt(r, effect) for effect in effects)
+            + " |"
+        )
     lines += [
         "",
         "## Cumulative, padding and causal-split ablation",
@@ -1364,8 +1473,11 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
     for sh in shapes:
         r = ratios_by_shape[sh.label]
         effects = ("pipeline_total", "lds_pad", "causal_split", "total")
-        lines.append(f"| {sh.batch} | {sh.seqlen} | {sh.hkv} | "
-                     + " | ".join(fmt(r, effect) for effect in effects) + " |")
+        lines.append(
+            f"| {sh.batch} | {sh.seqlen} | {sh.hkv} | "
+            + " | ".join(fmt(r, effect) for effect in effects)
+            + " |"
+        )
     lines += [
         "",
         "Speedup = numerator-arm median latency divided by denominator-arm median "
@@ -1373,7 +1485,9 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
         "A value >1x means the denominator arm is faster.",
         "",
         "## Compiled kernels",
-        "| B | S | Hkv | " + " | ".join(f"{STAGE_NUMBERS[name]}: {name}" for name in VARIANTS) + " |",
+        "| B | S | Hkv | "
+        + " | ".join(f"{STAGE_NUMBERS[name]}: {name}" for name in VARIANTS)
+        + " |",
         "|---:|---:|---:|" + "---|" * len(VARIANTS),
     ]
     for r in comparison_rows:
@@ -1388,22 +1502,32 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
     a_vs_b_rows = []
     for sh in shapes:
         key = (sh.batch, sh.seqlen, sh.hkv)
-        r = next(row for row in comparison_rows if
-                 (row["batch"], row["seqlen"], row["hkv"]) == key)
+        r = next(
+            row
+            for row in comparison_rows
+            if (row["batch"], row["seqlen"], row["hkv"]) == key
+        )
         p = ratios_by_shape[sh.label]
-        a_vs_b_rows.append({
-            "batch": sh.batch, "seqlen": sh.seqlen, "hkv": sh.hkv,
-            "A_original_kernel": EXPECTED_A_KERNEL[key],
-            "A_compiled_kernel": r["A_kernel"],
-            "A_kernel_name_matches_original": r["A_kernel"] == EXPECTED_A_KERNEL[key],
-            "B7_kernel": r["pipeline_pad_dsplit_kernel"],
-            "A_median_ms": r["A_median_ms"],
-            "B7_median_ms": r["pipeline_pad_dsplit_median_ms"],
-            "speedup_A_over_B7": p["A_vs_pipeline_pad_dsplit"]["speedup"],
-            "latency_reduction_pct": p["A_vs_pipeline_pad_dsplit"]["latency_reduction_pct"],
-            "paired_min": p["A_vs_pipeline_pad_dsplit"]["paired_min"],
-            "paired_max": p["A_vs_pipeline_pad_dsplit"]["paired_max"],
-        })
+        a_vs_b_rows.append(
+            {
+                "batch": sh.batch,
+                "seqlen": sh.seqlen,
+                "hkv": sh.hkv,
+                "A_original_kernel": EXPECTED_A_KERNEL[key],
+                "A_compiled_kernel": r["A_kernel"],
+                "A_kernel_name_matches_original": r["A_kernel"]
+                == EXPECTED_A_KERNEL[key],
+                "B7_kernel": r["pipeline_pad_dsplit_kernel"],
+                "A_median_ms": r["A_median_ms"],
+                "B7_median_ms": r["pipeline_pad_dsplit_median_ms"],
+                "speedup_A_over_B7": p["A_vs_pipeline_pad_dsplit"]["speedup"],
+                "latency_reduction_pct": p["A_vs_pipeline_pad_dsplit"][
+                    "latency_reduction_pct"
+                ],
+                "paired_min": p["A_vs_pipeline_pad_dsplit"]["paired_min"],
+                "paired_max": p["A_vs_pipeline_pad_dsplit"]["paired_max"],
+            }
+        )
     write_csv(out_dir / "A_vs_B7.csv", tuple(a_vs_b_rows[0]), a_vs_b_rows)
     environment["run"] = {
         "shapes": [asdict(sh) for sh in shapes],
@@ -1450,6 +1574,7 @@ def _run_shapes(args, rocke, environment, shapes, out_dir, rng, stream_ptr) -> i
         "keep latency CSVs internal"
     )
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

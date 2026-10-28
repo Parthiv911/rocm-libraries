@@ -2341,9 +2341,7 @@ def _build_attention_dense_single_buffer(
                 # final tile remains safely masked even when it is below the
                 # diagonal (e.g. seqlen_kv < seqlen_q).
                 diag_start = b.mul(qb, b.const_i32(n_per))
-                body_upper = b.select(
-                    b.cmp_lt(diag_start, last_j), diag_start, last_j
-                )
+                body_upper = b.select(b.cmp_lt(diag_start, last_j), diag_start, last_j)
                 body = b.scf_for_iter(
                     zero,
                     body_upper,
@@ -2355,7 +2353,8 @@ def _build_attention_dense_single_buffer(
                 with body as (j, carry):
                     pipeline_step(j, carry, masked=False)
                 tail_args = [
-                    (name + "_t", val) for (name, _), val in zip(iter_args, body.results)
+                    (name + "_t", val)
+                    for (name, _), val in zip(iter_args, body.results)
                 ]
                 loop = b.scf_for_iter(
                     body_upper,

@@ -239,7 +239,7 @@ For each of the eight shapes:
 
 22. Report the observed same-round range:
 
-    `Min = min(R_1, R_2, R_3, R_4, R_5)`  
+    `Min = min(R_1, R_2, R_3, R_4, R_5)`
     `Max = max(R_1, R_2, R_3, R_4, R_5)`
 
 23. Report the central B7-vs-A reduction from the **ratio of the two medians**, not the median of the five round-level reductions.
