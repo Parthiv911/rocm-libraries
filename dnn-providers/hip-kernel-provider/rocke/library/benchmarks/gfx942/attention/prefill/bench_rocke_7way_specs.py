@@ -431,63 +431,59 @@ def add_module_paths(rocke: Path) -> None:
 
 
 def fp32_reference(q, k, v, *, scale: float, chunk: int):
-    """Chunked causal GQA SDPA in NumPy FP32 over the exact BF16 inputs.
+    """Causal GQA SDPA in FP32 over the exact BF16 inputs, computed with torch on
+    the GPU (chunked over query rows). Returns a torch FP32 tensor on the device."""
+    import torch
 
-    Batches and KV heads are processed separately. Peak score matrix is
-    (Hq/Hkv, chunk, S) so largest shapes do not allocate an S-by-S tensor.
-    """
+    del chunk
+    dev = torch.device("cuda")
     batch, sq, hq, d = q.shape
-    _, sk, hkv, _ = k.shape
+    hkv = k.shape[2]
     gqa = hq // hkv
-    result = np.empty((batch, sq, hq, d), dtype=np.float32)
-    key_indices = np.arange(sk)[None, :]
+    qt = torch.from_numpy(np.ascontiguousarray(q)).to(dev).float()
+    kt = torch.from_numpy(np.ascontiguousarray(k)).to(dev).float()
+    vt = torch.from_numpy(np.ascontiguousarray(v)).to(dev).float()
+    result = torch.empty((batch, sq, hq, d), dtype=torch.float32, device=dev)
+    rows = 1024
+    keys = torch.arange(k.shape[1], device=dev)[None, :]
     for b in range(batch):
-        for h in range(hkv):
-            first, last = h * gqa, (h + 1) * gqa
-            kt = k[b, :, h, :].T
-            val = v[b, :, h, :]
-            for qs in range(0, sq, chunk):
-                qe = min(qs + chunk, sq)
-                query = q[b, qs:qe, first:last, :].transpose(1, 0, 2)
-                scores = np.matmul(query, kt)
-                scores *= np.float32(scale)
-                # Bottom-left aligned causal mask: key_index <= query_index.
-                masked = key_indices > np.arange(qs, qe)[:, None]
-                np.copyto(scores, -np.inf, where=masked[None, :, :])
-                scores -= np.max(scores, axis=-1, keepdims=True)
-                np.exp(scores, out=scores)
-                scores /= np.sum(scores, axis=-1, keepdims=True)
-                result[b, qs:qe, first:last, :] = np.matmul(scores, val).transpose(
-                    1, 0, 2
-                )
+        kb = kt[b].permute(1, 0, 2).repeat_interleave(gqa, dim=0)  # [Hq, Sk, D]
+        vb = vt[b].permute(1, 0, 2).repeat_interleave(gqa, dim=0)
+        for qs in range(0, sq, rows):
+            qe = min(qs + rows, sq)
+            qb = qt[b, qs:qe].permute(1, 0, 2)  # [Hq, rows, D]
+            scores = torch.matmul(qb, kb.transpose(1, 2)) * scale
+            masked = keys > torch.arange(qs, qe, device=dev)[:, None]
+            scores.masked_fill_(masked[None], float("-inf"))
+            probs = torch.softmax(scores, dim=-1)
+            result[b, qs:qe] = torch.matmul(probs, vb).permute(1, 0, 2)
+    torch.cuda.synchronize()
     return result
 
 
 def validate(actual_bits, reference, *, atol: float, rtol: float, chunk: int = 256):
-    """Compare every BF16 output element to FP32 reference, chunked on host."""
-    from rocke.numeric.bf16 import bf16_to_f32
+    """Compare every BF16 output element to the FP32 reference on the GPU, with
+    numpy.testing.assert_allclose semantics (|a - e| <= atol + rtol * |e|)."""
+    import torch
 
-    if actual_bits.shape != reference.shape:
+    del chunk
+    if tuple(actual_bits.shape) != tuple(reference.shape):
         raise AssertionError(
-            f"output shape {actual_bits.shape} != reference {reference.shape}"
+            f"output shape {actual_bits.shape} != reference {tuple(reference.shape)}"
         )
-    if not np.isfinite(reference).all():
+    if not torch.isfinite(reference).all():
         raise AssertionError("FP32 reference contains nonfinite values")
-    max_abs = 0.0
-    max_rel = 0.0
-    for b in range(reference.shape[0]):
-        for qs in range(0, reference.shape[1], chunk):
-            sl = slice(qs, qs + chunk)
-            actual32 = bf16_to_f32(actual_bits[b, sl])
-            expected = reference[b, sl]
-            np.testing.assert_allclose(
-                actual32, expected, atol=atol, rtol=rtol, equal_nan=False
-            )
-            diff = np.abs(actual32 - expected)
-            max_abs = max(max_abs, float(diff.max()))
-            max_rel = max(
-                max_rel, float((diff / np.maximum(np.abs(expected), 1e-6)).max())
-            )
+    bits = torch.from_numpy(np.ascontiguousarray(actual_bits).view(np.int16))
+    actual32 = (bits.to(reference.device).to(torch.int32) << 16).view(torch.float32)
+    diff = (actual32 - reference).abs()
+    bad = ~(diff <= atol + rtol * reference.abs())  # NaN fails, as equal_nan=False
+    if bool(bad.any()):
+        raise AssertionError(
+            f"{int(bad.sum())} elements exceed atol={atol}, rtol={rtol}; "
+            f"max abs {float(diff.nan_to_num(float('inf')).max()):.3e}"
+        )
+    max_abs = float(diff.max())
+    max_rel = float((diff / reference.abs().clamp_min(1e-6)).max())
     return max_abs, max_rel
 
 
@@ -1383,7 +1379,7 @@ def _run_shapes(
             }
 
         resolved_rows[-1]["compiled_artifacts"] = compiled_artifacts
-        print("Building one chunked FP32 NumPy SDPA reference...")
+        print("Building one FP32 torch-GPU SDPA reference...")
         reference = fp32_reference(
             bf16_to_f32(q_bits),
             bf16_to_f32(k_bits),
@@ -1801,7 +1797,7 @@ def _run_shapes(
         "full_ablation_variant_count": len(VARIANTS),
         "correctness_atol": args.atol,
         "correctness_rtol": args.rtol,
-        "reference": "chunked NumPy FP32 causal GQA SDPA over BF16-rounded inputs",
+        "reference": "torch FP32 causal GQA SDPA on the GPU over BF16-rounded inputs (validation on GPU)",
         "input_dtype": "bf16",
         "warmup_per_arm": args.warmup,
         "rounds": args.rounds,

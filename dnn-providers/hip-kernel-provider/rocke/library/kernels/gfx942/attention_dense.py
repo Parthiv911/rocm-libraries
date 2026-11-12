@@ -493,6 +493,114 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     #   [B, Hq, Sq, 1] through a trailing ``lse_ptr`` kernel argument. Off by default;
     #   off emits no new IR, so the shipped kernel and its goldens are unchanged.
     emit_lse: bool = field(default=False, kw_only=True)
+    # k_lds_swizzle (prototype): unpadded K_lds rows with an XOR bank swizzle,
+    #   col' = col ^ ((row & 15) << 2), in place of the lds_row_pad pad. The K DMA
+    #   fetches the permuted global column so each lane still writes LDS dword `lane`.
+    k_lds_swizzle: bool = field(default=False, kw_only=True)
+    # k_read_b128 (prototype): paired-step D map (lane half h holds dims 16t+8h..+7
+    #   for steps 2t, 2t+1) so K is read with ds_read_b128 and Q with dwordx4 loads.
+    #   Needs a 16 B-aligned K row (lds_row_pad % 8 == 0); pad 8 is conflict-free.
+    k_read_b128: bool = field(default=False, kw_only=True)
+    # tile_interleave (prototype): unmasked pipeline tiles interleave VALU with MFMA
+    #   inside the tile -- QK nsub1 MFMAs cover nsub0's scale + partial max, and PV
+    #   runs per P pack with the next pack's exps and the O rescale between its
+    #   MFMAs. Every accumulator keeps its op order, so the output is bit-identical.
+    tile_interleave: bool = field(default=False, kw_only=True)
+    # tilv_v_write_qk (prototype, needs tile_interleave): carry V(j)'s register
+    #   payload into tile j and write it to LDS between QK nsub0's MFMAs (then
+    #   lgkmcnt(0) + barrier before nsub1), instead of a serial V-write section
+    #   between two barriers after PV. V(j+1) loads issue in the PV MFMA gaps.
+    tilv_v_write_qk: bool = field(default=False, kw_only=True)
+    # tilv_rescale_skip (prototype, needs tile_interleave): when alpha == 1 on every
+    #   lane (no row max changed), run a PV copy without the O rescale. O * 1 == O,
+    #   so the result is bit-identical.
+    tilv_rescale_skip: bool = field(default=False, kw_only=True)
+    # qk_lookahead (prototype, needs tilv_v_write_qk): pipeline step j carries tile
+    #   j's raw scores and runs QK(j+1) (K slot (j+1)%2) under tile j's V write and
+    #   softmax head; K(j+2) DMA goes to slot j%2. Same op order: bit-identical.
+    qk_lookahead: bool = field(default=False, kw_only=True)
+    # qkla_pack_ahead (prototype, needs qk_lookahead): P packs 1..N exps + packs
+    #   move from the PV gaps into the head under QK(j+1), paced evenly over its
+    #   MFMAs. The row-sum keeps its pack order: bit-identical.
+    qkla_pack_ahead: int = field(default=0, kw_only=True)
+    # qkla_rescale_plain (prototype, needs qk_lookahead): route each O rescale
+    #   product through an optimization barrier so it stays v_mul_f32 (a packed
+    #   v_pk_mul_f32 cannot issue while either wave's MFMA holds the pipe).
+    qkla_rescale_plain: bool = field(default=False, kw_only=True)
+    # qkla_read_ahead (prototype, needs qk_lookahead): QK(j+1) K ds_reads in flight
+    #   ahead of their MFMA; 0 keeps the default of 3.
+    qkla_read_ahead: int = field(default=0, kw_only=True)
+    # qkla_qk_tail (prototype, needs qk_lookahead): the last N QK(j+1) MFMAs move
+    #   below the mid barrier, one after each of PV(j)'s first N MFMAs, and the
+    #   K(j+2) DMA starts after them (a K read after a K DMA row waits vmcnt(0):
+    #   the scopes cannot tell the two slots apart). K(j+1) is already in its LDS
+    #   slot; each accumulator keeps its step order: bit-identical.
+    qkla_qk_tail: int = field(default=0, kw_only=True)
+    # qkla_rhythm_b / qkla_rhythm_pv (prototype, need qk_lookahead): ask the
+    #   scheduler for a fixed rhythm of 1 MFMA then N VALU through the region above
+    #   the mid barrier (b) and the PV region below it (pv), via
+    #   sched_group_barrier. Scheduling hints only: bit-identical.
+    qkla_rhythm_b: int = field(default=0, kw_only=True)
+    # qkla_pv_spread (prototype, needs qk_lookahead): even PV chunks. The exps of
+    #   packs PA+1..7 spread evenly over the PV MFMAs (each pack built right after
+    #   its last exp, before its PV), the QK tail on every other PV MFMA, the K DMA
+    #   after the tail. Same op order per accumulator and row sum: bit-identical.
+    qkla_pv_spread: bool = field(default=False, kw_only=True)
+    # qkla_pv_fence (prototype, needs qkla_pv_spread): sched_barrier(0) after every
+    #   PV pack (1) or after every PV MFMA's chunk (2), so the spread survives
+    #   scheduling. Hints only: bit-identical.
+    qkla_pv_fence: int = field(default=0, kw_only=True)
+    # qkla_chunked (prototype, needs qk_lookahead): every MFMA of the tile gets a
+    #   non-MFMA chunk of about the same estimated cycles. Above the mid barrier the
+    #   head (V stores, max, alpha, plain O rescale, packs 0..PA) fills the QK(j+1)
+    #   MFMAs; below it the pack exps, V reads, K DMA, V loads and S(j+1)'s scale
+    #   fill the PV + QK-tail MFMAs, each chunk fenced. S is carried scaled. Same op
+    #   order per value: bit-identical.
+    qkla_chunked: bool = field(default=False, kw_only=True)
+    # qkla_loads_b (prototype, needs qkla_chunked): issue V(j+1)'s loads in the
+    #   chunks above the mid barrier instead of PV.
+    qkla_loads_b: bool = field(default=False, kw_only=True)
+    # qkla_chunk_fence (prototype): chunk boundary kind for qkla_chunked,
+    #   0 = sched_barrier(0), 1 = s_setprio 0 (a hard scheduling boundary).
+    qkla_chunk_fence: int = field(default=0, kw_only=True)
+    # qkla_chunk_rev (prototype): 0 = first qkla_chunked placement; 1 = K(j+2) DMA
+    #   pinned to PV's first chunks, at least one unit per chunk, max steps in pairs,
+    #   and the head never exhausted before B's last MFMA. 2 = PV from a fixed
+    #   per-chunk plan, V reads two packs ahead, no packed subtracts. 3 = rev 2 with V
+    #   reads one pack ahead and the last QKLA_CARRY PV MFMAs of tile j run at the
+    #   start of tile j+1 (their V and P carried; zero for the first tile, flushed
+    #   at loop exit). 4 = rev 2 with V reads spread one ds_read per chunk (two
+    #   packs ahead) and each row-sum add delayed past the next exp (same order).
+    #   5 = rev 1's adaptive PV (V reads one pack ahead) plus: no packed subtracts,
+    #   each pair's rounding after the next exp, packs finished a chunk early,
+    #   S(j+1)'s scale split over the last chunks, delayed row-sum add.
+    qkla_chunk_rev: int = field(default=0, kw_only=True)
+    # q_lds_stage (prototype): load Q row-contiguous (16 B per lane, 64 B row
+    #   segments) and transpose it into the MFMA layout through the V buffer, which
+    #   is free until the prologue barrier. Replaces 16 row-scattered 8 B loads.
+    q_lds_stage: bool = field(default=False, kw_only=True)
+    # o_lds_stage (prototype): after one vmcnt(0)+barrier, stage O through the K
+    #   buffer (per-wave, XOR-swizzled) and store it row-contiguous with 16 B per
+    #   lane (full 128 B lines) instead of 16 row-scattered 8 B stores.
+    o_lds_stage: bool = field(default=False, kw_only=True)
+    # qkla_vdb (prototype): two V^T LDS slots. V(j) lives in slot j%2; V(j+1)
+    #   (loaded in B) is written into the other slot at the end of PV(j), so the
+    #   end barrier publishes it, the mid barrier is dropped, and no V registers
+    #   are carried across tiles.
+    #   1 = V(j+1) stores in PV(j)'s 2nd half, 2 = in B(j)'s 2nd half.
+    qkla_vdb: int = field(default=0, kw_only=True)
+    # qkla_split_wait (prototype, needs qkla_vdb + q_lds_stage): the prologue waits
+    #   only for Q + K(0) before QK(0); K(1) and V(0) stay in flight across QK(0)
+    #   and are drained (and V(0) published) by a second barrier before tile 0.
+    qkla_split_wait: bool = field(default=False, kw_only=True)
+    # q_full_line (prototype, needs qkla_split_wait + k_read_b128): each Q dwordx4
+    #   load covers 8 rows x 128 B (whole cache lines) instead of 16 rows x 64 B;
+    #   staged through both V slots (free until V(0) is published after QK(0)).
+    q_full_line: bool = field(default=False, kw_only=True)
+    # q_batch_wait (prototype, needs q_lds_stage): drain the Q loads (vmcnt 0)
+    #   before issuing the prologue K/V loads.
+    q_batch_wait: bool = field(default=False, kw_only=True)
+    qkla_rhythm_pv: int = field(default=0, kw_only=True)
     # kv_segments: split each work item's KV range into this many contiguous
     #   segments, one CTA each, on the default grid. Each segment writes its
     #   unnormalized FP32 partial O plus its running max / denominator to a
@@ -500,6 +608,59 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     #   count for short query lengths over long KV (chunked prefill), where one CTA
     #   per (query block, head) leaves most CUs idle. 1 (default) emits nothing new.
     kv_segments: int = field(default=1, kw_only=True)
+    # xcdlb (prototype, compare-only): the XCD-local load-balanced persistent
+    #   decode. wi % 8 is the XCD, wi // 8 its stream (cta_id // 8 + round * 38 at
+    #   NP = 304); 4 Q heads per XCD, longest query block first, 38-worker snake.
+    xcdlb: bool = field(default=False, kw_only=True)
+    # qkla_sub_pin (prototype): opaque s - m subtract at every qkla_chunk_rev (rev >= 2
+    # already does it), so SLP cannot pair two into a v_pk_add_f32.
+    qkla_sub_pin: bool = field(default=False, kw_only=True)
+    # qkla_lhalf (prototype): keep each lane half's partial row sum in the qkla_chunked
+    # loops (no per-tile ds_bpermute); the halves are added once after the loops. Exact:
+    # alpha is identical on both halves (the row max is reduced across them).
+    qkla_lhalf: bool = field(default=False, kw_only=True)
+    # qkla_lds_after_mfma (prototype): in each MFMA's chunk region, order the address
+    # VALU first, then the MFMA, then the LDS ops (sched_group_barrier), so an LDS op
+    # follows an MFMA (0-cycle issue gap) instead of a VALU (8 cycles). Covers the
+    # QK(j+1) K reads (steps >= 1), the V(j+1) stores (moved into the MFMA region) and
+    # the PV V reads (pack 0 read right after the last QK MFMA).
+    qkla_lds_after_mfma: bool = field(default=False, kw_only=True)
+    # qkla_vld_start / qkla_vld_stride (prototype): V(j+1) load item k issues in QK(j+1)
+    # chunk start + stride*k (default 0 / 1 = the first chunks, unchanged). Spreads the
+    # CU-wide VMEM issue burst at the tile start.
+    qkla_vld_start: int = field(default=0, kw_only=True)
+    qkla_vld_stride: int = field(default=1, kw_only=True)
+    # qkla_prio_bal (prototype, 0 = off): s_setprio(qkla_prio_bal) at the tile start
+    # (QK(j+1) region), s_setprio(0) when the wave enters PV(j). The wave that reaches PV
+    # first drops priority, so the lagging wave on the SIMD wins arbitration and catches up.
+    qkla_prio_bal: int = field(default=0, kw_only=True)
+    # qkla_max_ahead (prototype): the unmasked main loop computes S(j+1)'s row max in
+    # PV(j)'s tail chunks (after S(j+1)'s scale) and carries it, so tile j+1's head skips
+    # the max chain + ds_bpermute and starts alpha/rescale/exps at its first chunk.
+    # fmax is order-exact, so results are bit-identical. Masked tiles keep their own max.
+    qkla_max_ahead: bool = field(default=False, kw_only=True)
+    # qkla_even (prototype, 0 = off): target VALU issue cycles per MFMA gap. PV(j) is
+    # filled by an earliest-deadline-first scheduler over fine-grained units (s-m 4,
+    # exp 16, row-sum add 4, bf16 round 8, pack word 4, K DMA row 8, S scale 4), each
+    # element stage in a later chunk than its previous stage (no exp hazards); the
+    # QK(j+1) pack-ahead work is split the same way and costed by its VALU cycles.
+    qkla_even: int = field(default=0, kw_only=True)
+    # qkla_even_mix (prototype, needs qkla_even): in QK(j+1)'s head, interleave the O
+    # rescale (64 x v_mul) with the pack-ahead stages by fraction done, so the 16-cycle
+    # exps don't cluster in B's second half.
+    qkla_even_mix: bool = field(default=False, kw_only=True)
+    # wg_timing (prototype, measurement only, persistent grid): every wave writes
+    #   16 i32 to a trailing ``ts_ptr`` at [cta*8 + wave]: s_memrealtime at start
+    #   (lo, hi) and after its last item's stores drained (lo, hi), HW_ID, XCC_ID,
+    #   cta, wave; then s_memtime (shader clock) at start (lo, hi) and end (lo, hi).
+    wg_timing: bool = field(default=False, kw_only=True)
+
+    @property
+    def fastdiv_divisors(self) -> tuple[str, ...]:
+        if self.xcdlb and self.persistent and self.runtime_shape:
+            return ("nqb",)  # the xcdlb batch split divides its stream by NQB
+        return super().fastdiv_divisors
+
 
     @classmethod
     def supported_persist_decodes(cls) -> frozenset[str]:
@@ -774,8 +935,74 @@ def _tuning_name_tags(spec: "Gfx942AttentionDenseSpec") -> str:
         parts.append("wskip")
     if spec.emit_lse:
         parts.append("lse")
+    if spec.k_lds_swizzle:
+        parts.append("kswz")
+    if spec.k_read_b128:
+        parts.append("kb128")
+    if spec.tile_interleave:
+        parts.append("tilv")
+    if spec.tilv_v_write_qk:
+        parts.append("vwq")
+    if spec.tilv_rescale_skip:
+        parts.append("askip")
+    if spec.qk_lookahead:
+        parts.append("qkla")
+    if spec.qkla_pack_ahead:
+        parts.append(f"pa{spec.qkla_pack_ahead}")
+    if spec.qkla_rescale_plain:
+        parts.append("rsp")
+    if spec.qkla_read_ahead:
+        parts.append(f"ra{spec.qkla_read_ahead}")
+    if spec.qkla_qk_tail:
+        parts.append(f"qt{spec.qkla_qk_tail}")
+    if spec.qkla_rhythm_b or spec.qkla_rhythm_pv:
+        parts.append(f"rh{spec.qkla_rhythm_b}x{spec.qkla_rhythm_pv}")
+    if spec.qkla_pv_spread:
+        parts.append("pvs")
+    if spec.qkla_pv_fence:
+        parts.append(f"pvf{spec.qkla_pv_fence}")
+    if spec.qkla_chunked:
+        parts.append("chk")
+    if spec.qkla_loads_b:
+        parts.append("ldb")
+    if spec.qkla_chunk_fence:
+        parts.append(f"cf{spec.qkla_chunk_fence}")
+    if spec.qkla_chunk_rev:
+        parts.append(f"cr{spec.qkla_chunk_rev}")
+    if spec.q_lds_stage:
+        parts.append("qls")
+    if spec.o_lds_stage:
+        parts.append("ols")
+    if spec.qkla_vdb:
+        parts.append(f"vdb{spec.qkla_vdb}")
+    if spec.qkla_split_wait:
+        parts.append("sw")
+    if spec.q_full_line:
+        parts.append("qfl")
+    if spec.q_batch_wait:
+        parts.append("qbw")
     if spec.kv_segments != 1:
         parts.append(f"kvs{spec.kv_segments}")
+    if spec.xcdlb:
+        parts.append("xcdlb")
+    if spec.qkla_sub_pin:
+        parts.append("subpin")
+    if spec.qkla_lhalf:
+        parts.append("lhalf")
+    if spec.qkla_lds_after_mfma:
+        parts.append("lam")
+    if spec.qkla_vld_start or spec.qkla_vld_stride != 1:
+        parts.append(f"vld{spec.qkla_vld_start}s{spec.qkla_vld_stride}")
+    if spec.qkla_prio_bal:
+        parts.append(f"pb{spec.qkla_prio_bal}")
+    if spec.qkla_max_ahead:
+        parts.append("maxa")
+    if spec.qkla_even:
+        parts.append(f"even{spec.qkla_even}")
+    if spec.qkla_even_mix:
+        parts.append("mix")
+    if spec.wg_timing:
+        parts.append("wgt")
     return "".join(f"_{p}" for p in parts)
 
 
@@ -896,6 +1123,16 @@ def _pack_p_bf16(b: IRBuilder, elems):
         # Bytes 2-3 of each operand: low half <- first element, high <- second.
         words.append(b.perm_b32(rounded[0], rounded[1], b.const_i32(0x03020706)))
     return b.bitcast(b.vec_pack(words, I32), VectorType(BF16, len(elems)))
+
+
+def _pack_p_bf16_word(b: IRBuilder, e0, e1):
+    """One i32 word of :func:`_pack_p_bf16` (elements e0, e1), same ops."""
+    rounded = []
+    for e in (e0, e1):
+        bits = b.bitcast(e, I32)
+        lsb = b.land(b.lshr(bits, b.const_i32(16)), b.const_i32(1))
+        rounded.append(b.add(b.add(bits, b.const_i32(0x7FFF)), lsb))
+    return b.perm_b32(rounded[0], rounded[1], b.const_i32(0x03020706))
 
 
 def _use_kdb(spec: "Gfx942AttentionDenseSpec") -> bool:
@@ -1101,6 +1338,8 @@ def _lds_bytes(spec: "Gfx942AttentionDenseSpec") -> int:
     if spec.resolved_use_cfvst():
         # V transposed to [dim, token+pad] for the conflict-free store (D128).
         v_bytes = spec.head_size * (spec.block_n + spec.resolved_v_row_pad()) * 2
+        if getattr(spec, "qkla_vdb", False):
+            v_bytes *= 2
     else:
         # V keeps the natural [token, dim] async-DMA layout (D64, naive read).
         v_bytes = spec.block_n * _lds_row_stride(spec) * 2
@@ -1326,9 +1565,136 @@ def supports_attention_dense(
             "causal_diag_split applies only to causal attention without a sliding "
             "window"
         )
+    if spec.k_read_b128 and not (
+        spec.head_size == 128 and spec.resolved_use_cfvst() and spec.lds_row_pad % 8 == 0
+    ):
+        return False, (
+            "k_read_b128 (prototype) needs D128 with the cfvst V path and a 16 B-aligned "
+            "K row (lds_row_pad % 8 == 0)"
+        )
+    if spec.tile_interleave and not (
+        _use_kdb(spec) and _use_vpf(spec) and spec.block_n == 64 and spec.head_size == 128
+        and spec.resolved_use_cfvst() and not spec.iglp and spec.pv_sched_fence_mask is None
+        and spec.pv_priority == 0
+        and (not spec.k_read_b128 or spec.qk_lookahead) and not spec.sliding_window
+        and not spec.window_wave_skip
+    ):
+        return False, (
+            "tile_interleave (prototype) needs the BN64/D128 cfvst KDB+VPF pipeline "
+            "without iglp, a PV fence/priority, a sliding window, or k_read_b128 "
+            "outside qk_lookahead"
+        )
+    if (spec.tilv_v_write_qk or spec.tilv_rescale_skip) and not spec.tile_interleave:
+        return False, "tilv_v_write_qk / tilv_rescale_skip need tile_interleave"
+    if spec.qk_lookahead and not (spec.tilv_v_write_qk and not spec.tilv_rescale_skip):
+        return False, "qk_lookahead (prototype) needs tilv_v_write_qk without tilv_rescale_skip"
+    if (
+        spec.qkla_pack_ahead or spec.qkla_rescale_plain or spec.qkla_read_ahead
+        or spec.qkla_qk_tail or spec.qkla_rhythm_b or spec.qkla_rhythm_pv
+        or spec.qkla_pv_spread or spec.qkla_pv_fence or spec.qkla_chunked
+        or spec.qkla_loads_b
+    ) and not spec.qk_lookahead:
+        return False, (
+            "qkla_pack_ahead / qkla_rescale_plain / qkla_read_ahead / qkla_qk_tail "
+            "need qk_lookahead"
+        )
+    if spec.qkla_chunk_rev >= 3 and (not spec.qkla_chunked or spec.qkla_qk_tail):
+        return False, "qkla_chunk_rev 3 needs qkla_chunked without qkla_qk_tail"
+    if spec.q_lds_stage and not (
+        (spec.qk_lookahead or spec.tilv_v_write_qk)
+        and spec.resolved_use_cfvst()
+        and (_use_kdb(spec) or _use_vpf(spec))
+        and spec.head_size == 128
+        and spec.kv_segments == 1
+        and spec.head_size * (spec.block_n + spec.resolved_v_row_pad()) * 2
+        >= (spec.block_m // 32) * 32 * 32 * 2
+    ):
+        return False, (
+            "q_lds_stage needs the D128 CFVST pipeline with qk_lookahead or "
+            "tilv_v_write_qk (V published after the prologue barrier) and a V "
+            "buffer of at least 2 KB per wave"
+        )
+    if spec.qkla_vdb not in (0, 1, 2):
+        return False, "qkla_vdb must be 0, 1 or 2"
+    if spec.qkla_vdb and not (
+        spec.qk_lookahead and spec.qkla_chunked and spec.qkla_chunk_rev != 3
+        and spec.tilv_v_write_qk and spec.resolved_use_cfvst()
+    ):
+        return False, (
+            "qkla_vdb needs qk_lookahead + qkla_chunked (not rev 3) + tilv_v_write_qk "
+            "on the cfvst V path"
+        )
+    if spec.qkla_lds_after_mfma and not (
+        spec.qk_lookahead and spec.qkla_chunked and spec.qkla_vdb == 2
+        and spec.qkla_chunk_rev == 1 and not spec.qkla_qk_tail
+    ):
+        return False, "qkla_lds_after_mfma (prototype) needs qkla_chunked rev 1, qkla_vdb 2, no QK tail"
+    if (spec.qkla_vld_start or spec.qkla_vld_stride != 1) and not (
+        spec.qkla_chunked and spec.qkla_loads_b and spec.qkla_vld_stride >= 1
+        and spec.qkla_vld_start >= 0
+        and spec.qkla_vld_start + spec.qkla_vld_stride * 3 < 16
+    ):
+        return False, "qkla_vld_* (prototype): qkla_chunked + qkla_loads_b, last V load before chunk 16"
+    if spec.qkla_prio_bal and not (
+        spec.qkla_chunked and 1 <= spec.qkla_prio_bal <= 3 and spec.qkla_chunk_fence != 1
+    ):
+        return False, "qkla_prio_bal (prototype): 1..3, qkla_chunked, not with qkla_chunk_fence=1"
+    if spec.qkla_max_ahead and not (
+        spec.qk_lookahead and spec.qkla_chunked and spec.qkla_chunk_rev == 1
+        and not spec.qkla_qk_tail and spec.qkla_vdb
+    ):
+        return False, "qkla_max_ahead (prototype) needs qkla_chunked rev 1, no QK tail, qkla_vdb"
+    if spec.qkla_even and not (
+        spec.qk_lookahead and spec.qkla_chunked and spec.qkla_chunk_rev == 1
+        and not spec.qkla_qk_tail and spec.qkla_vdb == 2 and 8 <= spec.qkla_even <= 64
+        and spec.dtype == "bf16" and not spec.qkla_max_ahead
+    ):
+        return False, "qkla_even (prototype): bf16, qkla_chunked rev 1, qkla_vdb 2, no QK tail, 8..64"
+    if spec.qkla_even_mix and not spec.qkla_even:
+        return False, "qkla_even_mix (prototype) needs qkla_even"
+    if spec.qkla_lhalf and not (spec.qk_lookahead and spec.qkla_chunked):
+        return False, "qkla_lhalf (prototype) needs qk_lookahead + qkla_chunked"
+    if spec.qkla_split_wait and not (spec.qkla_vdb and spec.q_lds_stage):
+        return False, "qkla_split_wait (prototype) needs qkla_vdb + q_lds_stage"
+    if spec.q_full_line and not (spec.qkla_split_wait and spec.k_read_b128):
+        return False, "q_full_line (prototype) needs qkla_split_wait + k_read_b128"
+    if spec.q_batch_wait and not spec.q_lds_stage:
+        return False, "q_batch_wait (prototype) needs q_lds_stage"
+    if spec.o_lds_stage and not (
+        spec.head_size == 128
+        and not spec.emit_lse
+        and spec.kv_segments == 1
+        and not _k_group_pad_active(spec)
+        and spec.block_n * _lds_row_stride(spec) * 2 * spec.lds_num_buffers
+        >= (spec.block_m // 32) * 32 * 64 * 2
+    ):
+        return False, (
+            "o_lds_stage needs D128, no emit_lse, no kv_segments, and a K buffer of "
+            "at least 4 KB per wave"
+        )
+    if not 0 <= spec.qkla_qk_tail <= 16:
+        return False, "qkla_qk_tail must be in [0, 16] (the K DMA follows the tail in PV)"
+    if not 0 <= spec.qkla_pack_ahead < spec.block_n // 8:
+        return False, f"qkla_pack_ahead must be in [0, {spec.block_n // 8 - 1}]"
+    if spec.qkla_read_ahead < 0:
+        return False, "qkla_read_ahead must be >= 0"
+    if spec.k_lds_swizzle and not (spec.k_read_b128 and spec.lds_row_pad == 0):
+        return False, (
+            "k_lds_swizzle (prototype) needs k_read_b128 and lds_row_pad=0 "
+            "(the swizzle replaces the K row pad)"
+        )
     ok, why = check_kv_segments(spec)
     if not ok:
         return False, why
+    if spec.xcdlb and not (
+        spec.persistent
+        and spec.num_persistent == 304
+        and spec.num_query_heads == 32
+        and spec.num_kv_heads in (8, 16)
+    ):
+        return False, "xcdlb (prototype) needs persistent NP=304, Hq=32, Hkv 8/16"
+    if spec.wg_timing and not spec.persistent:
+        return False, "wg_timing (prototype) is persistent-grid only"
     # The swizzle mask (V_LDROW//4 - 1) only tiles a pow2 >= 64 row; an explicit
     # v_row_pad that leaves V_LDROW non-pow2 while the swizzle is on would emit an
     # out-of-bounds column. Reject loudly (set use_v_swizzle=False to sweep the pad).
@@ -1401,6 +1767,53 @@ def supports_attention_dense(
                 f"with use_sinks)"
             )
     return True, ""
+
+
+def _xcdlb_decode(shape, wi):
+    """xcdlb prototype (port of the Oct-24 attention_dense (13).py decode).
+
+    The original looped ``stream = cta_id // 8 .. step 38`` per XCD ``cta_id % 8``;
+    at NP = 304 that is exactly ``wi // 8`` / ``wi % 8`` of the grid-stride loop
+    (``wi = cta_id + round * 304``), and ``wi < W`` iff ``stream < B * NQB * 4``
+    (Hq = 32). Returns ``(qb, hq, bt, hkv=...)`` for ``_run_work_item``."""
+    b = shape.b
+    c = b.const_i32
+    owner = b.mod(wi, c(8))  # XCD: 4 Q heads, 1 (Hkv 8) or 2 (Hkv 16) kv heads
+    stream = b.div(wi, c(8))
+    nqb = shape.val("nqb")
+    per_bt = b.mul(nqb, c(4))  # this XCD's work per batch
+    base_jobs = b.div(per_bt, c(38))
+    n_long = b.mod(per_bt, c(38))
+    n_short = b.sub(c(38), n_long)
+    # floor(stream / (NQB*4)) == floor((stream >> 2) / NQB), via the nqb fastdiv.
+    bt = shape.div(b.lshr(stream, c(2)), "nqb")
+    local = b.sub(stream, b.mul(bt, per_bt))
+    rnd = b.div(local, c(38))
+    slot = b.mod(local, c(38))
+    # Capacity-aware 38-worker causal snake, short/long slot permutation and
+    # partial final round, as in the original.
+    base_pos = b.select(
+        b.cmp_lt(slot, n_long), b.add(n_short, slot), b.sub(slot, n_long)
+    )
+    even = b.cmp_eq(b.mod(rnd, c(2)), c(0))
+    full_rank = b.add(
+        b.mul(rnd, c(38)), b.select(even, base_pos, b.sub(c(37), base_pos))
+    )
+    part_rank = b.add(
+        b.mul(base_jobs, c(38)),
+        b.select(even, slot, b.sub(b.sub(n_long, c(1)), slot)),
+    )
+    rank = b.select(b.cmp_lt(rnd, base_jobs), full_rank, part_rank)
+    # Longest query block first, rotating the XCD's 4 local Q heads.
+    qb = b.sub(b.sub(nqb, c(1)), b.lshr(rank, c(2)))
+    lhq = b.mod(rank, c(4))
+    hq = b.add(b.mul(owner, c(4)), lhq)
+    hkv = b.select(
+        b.cmp_eq(shape.val("num_kv_heads"), c(8)),
+        owner,
+        b.add(b.mul(owner, c(2)), b.lshr(lhq, c(1))),
+    )
+    return qb, hq, bt, hkv
 
 
 def build_attention_dense(
@@ -1589,6 +2002,8 @@ def _build_attention_dense_single_buffer(
     KVS = spec.kv_segments
     if KVS > 1:
         segment_params = declare_segment_params(b)
+    if spec.wg_timing:
+        ts_p = b.param("ts_ptr", PtrType(I32, "global"), noalias=True, writeonly=True, align=16)
     qk_scale = b.fmul(scale, b.const_f32(LOG2E))
 
     tid = b.thread_id_x()
@@ -1618,6 +2033,8 @@ def _build_attention_dense_single_buffer(
     # whose register budget it was sized for); D64 keeps the generic conversion.
     PACK_P_BF16 = USE_CFVST and spec.dtype == "bf16"
     USE_KDB = _use_kdb(spec)
+    KSWZ = spec.k_lds_swizzle
+    KB128 = spec.k_read_b128
     USE_VPF = _use_vpf(spec)
     USE_PIPELINE = USE_KDB or USE_VPF
     K_BUFS = spec.lds_num_buffers
@@ -1641,7 +2058,9 @@ def _build_attention_dense_single_buffer(
         # the other is the _lds_bytes budget -- and both take it from the same
         # resolver on the same spec, so the budget cannot under-count this allocation.
         V_LDROW = BN + spec.resolved_v_row_pad()
-        V_lds = b.smem_alloc(dtype, [1, D, V_LDROW], name_hint="VldsT")
+        V_lds = b.smem_alloc(
+            dtype, [2 if spec.qkla_vdb else 1, D, V_LDROW], name_hint="VldsT"
+        )
         # V^T bank-conflict swizzle (col' = key ^ ((dim & V_SWZ_MASK) << 2)). Whether it
         # is emitted is an independent spec decision (resolved_use_v_swizzle), NOT
         # derived from the row width, so the pad-value sweep cannot silently toggle it;
@@ -1754,6 +2173,9 @@ def _build_attention_dense_single_buffer(
     else:
         V_TOK_PAIRS = V_DIM_PAIRS = V_BLOCKS = V_ITEMS = 0
 
+    VDB = spec.qkla_vdb
+    V_SLOT = {"r": None, "w": None}  # qkla_vdb: current read / write V^T slot
+
     def _cfvst_store_v(payload):
         """perm_b32 2x2 transpose + contiguous ds_write publishing V_lds[dim, token].
 
@@ -1781,13 +2203,13 @@ def _build_attention_dense_single_buffer(
                 c0, c1 = t0, t0
             b.smem_store_vN(
                 V_lds,
-                [b.const_i32(0), d0, c0],
+                [b.const_i32(0) if V_SLOT["w"] is None else V_SLOT["w"], d0, c0],
                 b.bitcast(row_d0, VectorType(dtype, 2)),
                 2,
             )
             b.smem_store_vN(
                 V_lds,
-                [b.const_i32(0), d1, c1],
+                [b.const_i32(0) if V_SLOT["w"] is None else V_SLOT["w"], d1, c1],
                 b.bitcast(row_d1, VectorType(dtype, 2)),
                 2,
             )
@@ -1808,6 +2230,25 @@ def _build_attention_dense_single_buffer(
         belongs there, not on this read.
         naive (D64): element-wise from V_lds[key, dim] (bank-heavy, but D64 is
         VGPR-bound under cfvst, not LDS-read-bound)."""
+        if USE_CFVST and V_SLOT["r"] is not None and SWZ_V:
+            # qkla_vdb: one per-tile base (slot + row lane_m + (d_base ^ swizzle)),
+            # then (kk*8) by XOR (kk*8 and d_base use disjoint bits, so
+            # (kk*8 + d) ^ M == (kk*8) ^ (d ^ M)); dt rows fold into immediates.
+            if V_SLOT.get("rb") is None:
+                m = b.land(lane_m, b.const_i32(V_SWZ_MASK))
+                sw = b.shl(m, b.const_i32(2))
+                V_SLOT["rb"] = b.add(
+                    b.add(
+                        b.mul(V_SLOT["r"], b.const_i32(D * V_LDROW)),
+                        b.mul(lane_m, b.const_i32(V_LDROW)),
+                    ),
+                    b.xor(d_base, sw),
+                )
+            vb = V_SLOT["rb"]
+            vx = vb if kk == 0 else b.xor(vb, b.const_i32(kk * 8))
+            e = b.add(vx, b.const_i32(dt * 32 * V_LDROW))
+            return b.smem_load_vN(V_lds, b.const_i32(0), b.const_i32(0), e,
+                                  dtype=dtype, n=4)
         if USE_CFVST:
             dim_row = b.add(b.const_i32(dt * 32), lane_m)
             key0 = b.add(b.const_i32(kk * 8), d_base)
@@ -1816,7 +2257,10 @@ def _build_attention_dense_single_buffer(
                 m = b.land(dim_row, b.const_i32(V_SWZ_MASK))
                 s = b.shl(m, b.const_i32(2))
                 col = b.xor(key0, s)
-            return b.smem_load_vN(V_lds, b.const_i32(0), dim_row, col, dtype=dtype, n=4)
+            return b.smem_load_vN(
+                V_lds, b.const_i32(0) if V_SLOT["r"] is None else V_SLOT["r"],
+                dim_row, col, dtype=dtype, n=4,
+            )
         dim_col = b.add(b.const_i32(dt * 32), lane_m)
         elems = []
         for j in range(4):
@@ -1878,12 +2322,80 @@ def _build_attention_dense_single_buffer(
         # with the scale.
         q_tok = b.add(q_tok0, lane_m)
         q_packs = []
-        for ks in range(K_STEPS):
-            col = b.add(b.const_i32(ks * 8), d_base)
-            addr = b.add(b.add(q_base, b.mul(q_tok, _stride_q())), col)
-            q_packs.append(b.global_load_vN(q, addr, dtype, 4, align=8))
+        if KB128 and not spec.q_lds_stage:
+            # Paired-step D permutation: lane half h holds the 8 contiguous dims
+            # 16t + 8h .. +7 and splits them over steps 2t (first 4) and 2t+1 (last
+            # 4). K uses the same map, so every dim is still summed exactly once.
+            q_row = b.add(q_base, b.mul(q_tok, _stride_q()))
+            q_h8 = b.mul(lane_h, b.const_i32(8))
+            for t in range(K_STEPS // 2):
+                col = b.add(b.const_i32(t * 16), q_h8)
+                v8 = b.global_load_vN(q, b.add(q_row, col), dtype, 8, align=16)
+                for half in range(2):
+                    q_packs.append(
+                        b.vec_pack(
+                            [b.vec_extract(v8, half * 4 + i) for i in range(4)], dtype
+                        )
+                    )
+        elif spec.q_lds_stage and spec.q_full_line:
+            # Whole-line Q: lane = (row i*8 + lane/8, dims h*64 + (lane%8)*8) ->
+            # 8 rows x 128 B per load; q_raw[h*4 + i].
+            q_raw = []
+            lane_q = b.optimization_barrier(lane)  # keep per item (no hoist/spill)
+            q_lrow = b.div(lane_q, b.const_i32(8))
+            q_lcol = b.mul(b.mod(lane_q, b.const_i32(8)), b.const_i32(8))
+            for h in range(2):
+                for i in range(4):
+                    row = b.add(b.add(q_tok0, b.const_i32(i * 8)), q_lrow)
+                    col = b.add(b.const_i32(h * 64), q_lcol)
+                    addr = b.add(b.add(q_base, b.mul(row, _stride_q())), col)
+                    q_raw.append(b.global_load_vN(q, addr, dtype, 8, align=16))
+        elif spec.q_lds_stage:
+            # Row-contiguous Q: lane = (row i*16 + lane/4, 8 dims at quarter p,
+            # chunk lane%4) -> 16 rows x 64 B per load. _stage_q transposes it.
+            q_raw = []
+            q_lrow = b.div(lane, b.const_i32(4))
+            q_lcol = b.mul(b.mod(lane, b.const_i32(4)), b.const_i32(8))
+            for p in range(4):
+                for i in range(2):
+                    row = b.add(b.add(q_tok0, b.const_i32(i * 16)), q_lrow)
+                    col = b.add(b.const_i32(p * 32), q_lcol)
+                    addr = b.add(b.add(q_base, b.mul(row, _stride_q())), col)
+                    q_raw.append(b.global_load_vN(q, addr, dtype, 8, align=16))
+        else:
+            for ks in range(K_STEPS):
+                col = b.add(b.const_i32(ks * 8), d_base)
+                addr = b.add(b.add(q_base, b.mul(q_tok, _stride_q())), col)
+                q_packs.append(b.global_load_vN(q, addr, dtype, 4, align=8))
 
-        def _async_load(rsrc, lds_base, tile_key0, group_pad=False, kbuf=None):
+        def _async_load_rows(rsrc, lds_base, tile_key0, buf_off, kswz):
+            """D128 async DMA, one K row per instruction; yields after each row so a
+            caller can spread the issue (tile_interleave). _async_load drains it, so
+            the default emission is op-for-op unchanged."""
+            for r in range(ROWS_PER_WAVE):
+                row = b.add(b.mul(wave, b.const_i32(ROWS_PER_WAVE)), b.const_i32(r))
+                row_lds_off = b.zext(b.mul(row, b.const_i32(K_LDROW_BYTES)), I64)
+                if buf_off is not None:
+                    row_lds_off = b.add(buf_off, row_lds_off)
+                row_base = b.smem_ptr_add(lds_base, row_lds_off)
+                gkey = b.add(tile_key0, row)
+                gcol = b.mul(lane, b.const_i32(2))
+                voff = b.add(b.add(k_base, b.mul(gkey, _stride_k())), gcol)
+                if kswz:
+                    # Lane writes LDS col 2*lane; fetch the logical col that the
+                    # 16 B-chunk XOR swizzle maps there (XOR is its own inverse).
+                    # Applied to the whole per-tile offset (its row/tile part is a
+                    # multiple of the 128-elem row, so only the lane col changes),
+                    # which keeps one lane base instead of 8 hoisted per-row ones.
+                    km = b.land(row, b.const_i32(7))
+                    ks_ = b.shl(km, b.const_i32(3))
+                    voff = b.xor(voff, ks_)
+                b.async_buffer_load_lds_addr(
+                    rsrc, row_base, b.mul(voff, b.const_i32(2)), zero_soff, 1
+                )
+                yield
+
+        def _async_load(rsrc, lds_base, tile_key0, group_pad=False, kbuf=None, kswz=False):
             # Only the pipelined K path passes kbuf; the default emission is
             # unchanged (no extra IR operations and the same LDS addresses).
             buf_off = (
@@ -1892,18 +2404,8 @@ def _build_attention_dense_single_buffer(
                 else None
             )
             if ROWS_PER_INSTR == 1:
-                for r in range(ROWS_PER_WAVE):
-                    row = b.add(b.mul(wave, b.const_i32(ROWS_PER_WAVE)), b.const_i32(r))
-                    row_lds_off = b.zext(b.mul(row, b.const_i32(K_LDROW_BYTES)), I64)
-                    if buf_off is not None:
-                        row_lds_off = b.add(buf_off, row_lds_off)
-                    row_base = b.smem_ptr_add(lds_base, row_lds_off)
-                    gkey = b.add(tile_key0, row)
-                    gcol = b.mul(lane, b.const_i32(2))
-                    voff = b.add(b.add(k_base, b.mul(gkey, _stride_k())), gcol)
-                    b.async_buffer_load_lds_addr(
-                        rsrc, row_base, b.mul(voff, b.const_i32(2)), zero_soff, 1
-                    )
+                for _ in _async_load_rows(rsrc, lds_base, tile_key0, buf_off, kswz):
+                    pass
             else:
                 lanes_per_row = D // 2
                 sub_row = b.div(lane, b.const_i32(lanes_per_row))
@@ -1946,14 +2448,20 @@ def _build_attention_dense_single_buffer(
             # conflict-free read). Naive (D64): K and V both via async DMA, natural
             # [token, dim].
             tk0 = b.mul(tile_idx, b.const_i32(BN))
-            _async_load(k_rsrc, K_lds_addr, tk0, group_pad=KPAD_D64)
+            _async_load(k_rsrc, K_lds_addr, tk0, group_pad=KPAD_D64, kswz=KSWZ)
             if not USE_CFVST:
                 _async_load(v_rsrc, V_lds_addr, tk0)
 
         def load_pipeline_k(kbuf, tile_idx):
             """Issue K(tile_idx) DMA into the selected K LDS slot."""
             tk0 = b.mul(tile_idx, b.const_i32(BN))
-            _async_load(k_rsrc, K_lds_addr, tk0, kbuf=kbuf)
+            _async_load(k_rsrc, K_lds_addr, tk0, kbuf=kbuf, kswz=KSWZ)
+
+        def load_pipeline_k_steps(kbuf, tile_idx):
+            """load_pipeline_k one DMA row per step (D128), for tile_interleave."""
+            tk0 = b.mul(tile_idx, b.const_i32(BN))
+            buf_off = b.zext(b.mul(kbuf, b.const_i32(BN * LDROW * 2)), I64)
+            return _async_load_rows(k_rsrc, K_lds_addr, tk0, buf_off, KSWZ)
 
         def _cfvst_load_v(tile_idx):
             """Issue the cfvst VMEM loads and keep each thread's V tile in VGPRs.
@@ -1987,6 +2495,12 @@ def _build_attention_dense_single_buffer(
             return payload
 
         def _cfvst_load_v_pipeline(tile_idx):
+            values = []
+            for _ in _cfvst_load_v_pipeline_steps(tile_idx, values):
+                pass
+            return values
+
+        def _cfvst_load_v_pipeline_steps(tile_idx, values):
             """Load packed V with one SGPR tile/wave base and a VGPR lane offset.
 
             For BF16 D128 / BN64, V_DIM_PAIRS=64 and
@@ -2011,7 +2525,6 @@ def _build_attention_dense_single_buffer(
             )
             stride_bytes = b.mul(_stride_k(), b.const_i32(2))
             lane_byte = b.mul(lane, b.const_i32(4))
-            values = []
             for it in range(V_ITEMS):
                 soff_it = (
                     soff0
@@ -2026,7 +2539,7 @@ def _build_attention_dense_single_buffer(
                     v_rsrc, lane_byte, b.add(soff_it, stride_bytes), dtype, 2
                 )
                 values.append((b.bitcast(x0, I32), b.bitcast(x1, I32)))
-            return values
+                yield
 
         def do_qk(kbuf=None):
             """S^T = K@Q^T via the 32x32x8 atom (K-doubled)."""
@@ -2041,7 +2554,40 @@ def _build_attention_dense_single_buffer(
                     # banks (the D64 K-pad probe). col stays within the D-wide row.
                     k_group = b.lshr(krow, b.const_i32(1))
                     k_within_off = b.mul(b.land(krow, b.const_i32(1)), b.const_i32(D))
-                for ks in range(K_STEPS):
+                if KB128:
+                    k_h8 = b.mul(lane_h, b.const_i32(8))
+                    if KSWZ:
+                        # One base per lane: A = slot + row(lane_m) + (8h ^ 8(r & 7)),
+                        # flat in elements. Slot and row offsets are multiples of the
+                        # 128-elem row, so XOR with the in-row step constant 16(t & 3)
+                        # never reaches them; t bit 2 (+64) and nsub (+32 rows) are adds
+                        # that fold into ds_read offsets.
+                        k_swz = b.shl(b.land(lane_m, b.const_i32(7)), b.const_i32(3))
+                        k_lo = b.xor(k_h8, k_swz)
+                        k_a = b.add(b.mul(lane_m, b.const_i32(LDROW)), k_lo)
+                        if kbuf is not None:
+                            k_a = b.add(b.mul(kbuf, b.const_i32(BN * LDROW)), k_a)
+                    for t in range(K_STEPS // 2):
+                        if KSWZ:
+                            k_x = k_a if t % 4 == 0 else b.xor(k_a, b.const_i32((t % 4) * 16))
+                            col = b.add(
+                                k_x, b.const_i32(nsub * 32 * LDROW + (t // 4) * 64)
+                            )
+                            k8 = b.smem_load_vN(K_lds, b.const_i32(0), b.const_i32(0),
+                                                col, dtype=dtype, n=8)
+                        else:
+                            col = b.add(b.const_i32(t * 16), k_h8)
+                            k8 = b.smem_load_vN(
+                                K_lds, b.const_i32(0) if kbuf is None else kbuf,
+                                krow, col, dtype=dtype, n=8)
+                        for half in range(2):
+                            k_pack = b.vec_pack(
+                                [b.vec_extract(k8, half * 4 + i) for i in range(4)], dtype
+                            )
+                            acc = mfma_32x32x8_for_dtype(
+                                b, dtype, k_pack, q_packs[2 * t + half], acc
+                            )
+                for ks in range(K_STEPS if not KB128 else 0):
                     col = b.add(b.const_i32(ks * 8), d_base)
                     if KPAD_D64:
                         k_pack = b.smem_load_vN(
@@ -2254,6 +2800,1203 @@ def _build_attention_dense_single_buffer(
                 b.s_setprio(0)
             return m_new, l_new, o_acc
 
+        def tile_ilv(kbuf, j, m_i, l_i, o_acc, make_v_steps, make_k_steps,
+                     v_store_steps=None):
+            """tile_interleave: QK, online softmax and PV of one unmasked tile, with
+            VALU placed between independent MFMAs in program order (in-order issue
+            only overlaps what is interleaved).
+
+            make_v_steps(values) -> generator issuing the V(j+1) register prefetch
+            (no LDS), appending its (x0, x1) payload to ``values``; it goes in the QK
+            nsub1 gaps, or in the PV gaps with tilv_v_write_qk. make_k_steps() ->
+            generator issuing the K(j+1) LDS DMA one row per PV MFMA from the second P
+            pack on, after every K read of the tile (K reads alias the K DMA; the alias
+            scopes only separate K from V). v_store_steps (tilv_v_write_qk) writes
+            V(j) to LDS in the QK nsub0 gaps, followed by lgkmcnt(0) + barrier.
+            Returns (m_new, l_new, o_acc, v_next_values)."""
+            VWQ = v_store_steps is not None
+
+            def qk_chain(nsub, between=None):
+                acc = b.zero_vec_f32(16)
+                krow = b.add(b.const_i32(nsub * 32), lane_m)
+                for ks in range(K_STEPS):
+                    col = b.add(b.const_i32(ks * 8), d_base)
+                    k_pack = b.smem_load_vN(K_lds, kbuf, krow, col, dtype=dtype, n=4)
+                    acc = mfma_32x32x8_for_dtype(b, dtype, k_pack, q_packs[ks], acc)
+                    if between is not None:
+                        between(ks)
+                return acc
+
+            if VWQ:
+                def store_v(ks):
+                    if ks % 4 == 0:
+                        next(v_store_steps, None)
+                acc0 = qk_chain(0, store_v)
+                for _ in v_store_steps:
+                    pass
+                # Publish V(j): every wave's writes land before any wave's PV(j).
+                b.sync_lds_only()
+            else:
+                acc0 = qk_chain(0)
+            # QK nsub1 chain with nsub0's scale + partial max between its MFMAs.
+            s0 = [None] * 16
+            mx = [neg_inf]
+            v_next = []
+            v_steps_qk = None if VWQ else make_v_steps(v_next)
+
+            def scale_max0(ks):
+                s0[ks] = b.fmul(b.vec_extract(acc0, ks), qk_scale)
+                mx[0] = b.fmax(mx[0], s0[ks])
+                if v_steps_qk is not None and ks % 4 == 1:
+                    next(v_steps_qk, None)
+            acc1 = qk_chain(1, scale_max0)
+            if v_steps_qk is not None:
+                for _ in v_steps_qk:
+                    pass
+            s1 = []
+            for i in range(16):
+                s1.append(b.fmul(b.vec_extract(acc1, i), qk_scale))
+                mx[0] = b.fmax(mx[0], s1[i])
+            s = [s0, s1]
+            local_max = mx[0]
+            tile_max = b.fmax(local_max, b.warp_shuffle_xor(local_max, 32))
+            m_new = b.fmax(m_i, tile_max)
+            exp2 = b.exp2_fast if spec.resolved_use_exp2_fast() else b.exp2
+            alpha = exp2(b.fsub(m_i, m_new))
+
+            def make_pack(elems):
+                return _pack_p_bf16(b, elems) if PACK_P_BF16 else b.vec_pack(elems, dtype)
+
+            def exp_elem(l_acc, kk, j2):
+                pv = exp2(b.fsub(s[kk // 4][(kk % 4) * 4 + j2], m_new))
+                l_acc[0] = b.fadd(l_acc[0], pv)
+                return pv if PACK_P_BF16 else b.cast_f32_to(pv, dtype)
+
+            if spec.tilv_rescale_skip:
+                # alpha == 1 on every lane: O * 1 == O, so skipping it is exact.
+                # Wave-uniform; each O[dt] rescale sits in its own small branch so the
+                # MFMAs and exps around it stay unduplicated.
+                same = b.wave_all(
+                    b.select(
+                        b.fcmp("oeq", alpha, b.const_f32(1.0)),
+                        b.const_i32(1),
+                        b.const_i32(0),
+                    )
+                )
+                need = b.cmp_eq(same, b.const_i32(0))
+
+            def first_pack(o_in, v0):
+                """Pack 0, O rescale (O[0] before, O[1..3] between the pack-0
+                MFMAs) and pack 1's exps between them. Returns (o, l_acc, pack1)."""
+                o = list(o_in)
+                l_acc = [b.const_f32(0.0)]
+
+                def rescale(dt):
+                    def mul():
+                        return b.vec_pack(
+                            [b.fmul(b.vec_extract(o[dt], i), alpha) for i in range(16)],
+                            F32,
+                        )
+                    if not spec.tilv_rescale_skip:
+                        return mul()
+                    br = b.scf_if_else(need, result_types=[VectorType(F32, 16)])
+                    with br as (then_ctx, else_ctx):
+                        with then_ctx:
+                            b.scf_yield(mul())
+                        with else_ctx:
+                            b.scf_yield(o[dt])
+                    return br.results[0]
+                pack0 = make_pack([exp_elem(l_acc, 0, j2) for j2 in range(4)])
+                o[0] = rescale(0)
+                elems = []
+                for dt in range(D_TILES):
+                    o[dt] = mfma_32x32x8_for_dtype(b, dtype, v0[dt], pack0, o[dt])
+                    if dt + 1 < D_TILES:
+                        o[dt + 1] = rescale(dt + 1)
+                    elems.append(exp_elem(l_acc, 1, dt))
+                return o, l_acc, make_pack(elems)
+
+            o_acc = list(o_acc)
+            v0 = [read_v(dt, 0) for dt in range(D_TILES)]
+            v_cur = [read_v(dt, 1) for dt in range(D_TILES)]
+            o_acc, l_acc, pack = first_pack(o_acc, v0)
+            vals = []
+            v_steps = make_v_steps(vals) if VWQ else None
+            k_steps = make_k_steps()
+            for kk in range(1, KK_STEPS):
+                nxt = kk + 1 < KK_STEPS
+                v_nxt = [read_v(dt, kk + 1) for dt in range(D_TILES)] if nxt else None
+                elems = []
+                for dt in range(D_TILES):
+                    o_acc[dt] = mfma_32x32x8_for_dtype(b, dtype, v_cur[dt], pack, o_acc[dt])
+                    if nxt:
+                        elems.append(exp_elem(l_acc, kk + 1, dt))
+                    if 1 <= kk <= 2:
+                        next(k_steps, None)
+                    if v_steps is not None and kk == 3:
+                        next(v_steps, None)
+                if nxt:
+                    pack = make_pack(elems)
+                    v_cur = v_nxt
+            for _ in k_steps:
+                pass
+            if v_steps is not None:
+                for _ in v_steps:
+                    pass
+                v_next = vals
+            l_local = l_acc[0]
+            l_tile = b.fadd(l_local, b.warp_shuffle_xor(l_local, 32))
+            l_new = b.fadd(b.fmul(l_i, alpha), l_tile)
+            return m_new, l_new, o_acc, v_next
+
+        QK_READ_AHEAD = spec.qkla_read_ahead or 3
+
+        def qk_raw_steps(kbuf, out, preyield=False):
+            """qk_lookahead: unscaled QK MFMA chain as a generator that yields after
+            each (K ds_read, MFMA) pair. The two key subtiles alternate; each still
+            accumulates ks in order, so the scores match do_qk exactly. Appends the
+            N_SUB accumulators to ``out`` when exhausted."""
+            accs = [b.zero_vec_f32(16) for _ in range(N_SUB)]
+            krows = [b.add(b.const_i32(nsub * 32), lane_m) for nsub in range(N_SUB)]
+            order = [(ks, nsub) for ks in range(K_STEPS) for nsub in range(N_SUB)]
+
+            if KB128:
+                # Paired-step map (as do_qk): one ds_read_b128 per (t, nsub) feeds
+                # steps ks = 2t, 2t+1. KSWZ: one lane base, 3 v_xor per subtile.
+                k_h8 = b.mul(lane_h, b.const_i32(8))
+                if KSWZ:
+                    k_swz = b.shl(b.land(lane_m, b.const_i32(7)), b.const_i32(3))
+                    k_a = b.add(
+                        b.mul(lane_m, b.const_i32(LDROW)), b.xor(k_h8, k_swz)
+                    )
+                    k_a = b.add(b.mul(kbuf, b.const_i32(BN * LDROW)), k_a)
+                k8s = {}
+
+                def read8(t, nsub):
+                    if KSWZ:
+                        k_x = k_a if t % 4 == 0 else b.xor(
+                            k_a, b.const_i32((t % 4) * 16)
+                        )
+                        col = b.add(
+                            k_x, b.const_i32(nsub * 32 * LDROW + (t // 4) * 64)
+                        )
+                        return b.smem_load_vN(K_lds, b.const_i32(0), b.const_i32(0),
+                                              col, dtype=dtype, n=8)
+                    col = b.add(b.const_i32(t * 16), k_h8)
+                    return b.smem_load_vN(K_lds, kbuf, krows[nsub], col,
+                                          dtype=dtype, n=8)
+
+                def read(i):
+                    ks, nsub = order[i]
+                    key = (ks // 2, nsub)
+                    if ks % 2 == 0:
+                        k8s[key] = read8(*key)
+                    return key, ks % 2
+
+                def pack_of(entry):
+                    key, half = entry
+                    k8 = k8s[key]
+                    return b.vec_pack(
+                        [b.vec_extract(k8, half * 4 + i) for i in range(4)], dtype
+                    )
+            else:
+                def read(i):
+                    ks, nsub = order[i]
+                    col = b.add(b.const_i32(ks * 8), d_base)
+                    return b.smem_load_vN(K_lds, kbuf, krows[nsub], col, dtype=dtype, n=4)
+
+                def pack_of(entry):
+                    return entry
+
+            packs = [read(i) for i in range(min(QK_READ_AHEAD, len(order)))]
+            if preyield:
+                yield  # rev 3: the first K reads issue before the carried MFMAs
+            for i, (ks, nsub) in enumerate(order):
+                if i + QK_READ_AHEAD < len(order):
+                    packs.append(read(i + QK_READ_AHEAD))
+                accs[nsub] = mfma_32x32x8_for_dtype(
+                    b, dtype, pack_of(packs[i]), q_packs[ks], accs[nsub]
+                )
+                yield
+            out.extend(accs)
+
+        def tile_la(j, m_i, l_i, o_acc, s_acc, v_store_steps, qk_next, masked,
+                    make_v_steps, make_k_steps):
+            """qk_lookahead: tile j from its carried raw scores ``s_acc``. Before the
+            mid barrier, QK(j+1) (``qk_next``) MFMAs cover V(j)'s LDS write, the
+            score scale/mask/max, alpha, the O rescale and pack 0's exps. After it,
+            PV(j) per P pack with the next pack's exps, the K(j+2) DMA rows and the
+            V(j+1) loads between its MFMAs. Returns (m_new, l_new, o_acc, v_next)."""
+            exp2 = b.exp2_fast if spec.resolved_use_exp2_fast() else b.exp2
+            st = {}
+            PACK_AHEAD = spec.qkla_pack_ahead
+            QK_TAIL = spec.qkla_qk_tail
+            RESCALE_PLAIN = spec.qkla_rescale_plain
+
+            def make_pack(elems):
+                return _pack_p_bf16(b, elems) if PACK_P_BF16 else b.vec_pack(elems, dtype)
+
+            l_acc = [b.const_f32(0.0)]
+
+            def exp_elem(kk, j2):
+                s = st["s"]
+                pv = exp2(b.fsub(s[kk // 4][(kk % 4) * 4 + j2], st["m"]))
+                l_acc[0] = b.fadd(l_acc[0], pv)
+                return pv if PACK_P_BF16 else b.cast_f32_to(pv, dtype)
+
+            def head():
+                # V(j) LDS write first: its payload registers die early.
+                for _ in v_store_steps:
+                    yield
+                s = [[None] * 16 for _ in range(N_SUB)]
+                mx = neg_inf
+                for nsub in range(N_SUB):
+                    for i in range(16):
+                        s[nsub][i] = b.fmul(b.vec_extract(s_acc[nsub], i), qk_scale)
+                        if not masked:
+                            mx = b.fmax(mx, s[nsub][i])
+                        if i % 2 == 1:
+                            yield
+                if masked:
+                    do_mask(s, j, lower=False, upper=True)
+                    yield
+                    for nsub in range(N_SUB):
+                        for i in range(16):
+                            mx = b.fmax(mx, s[nsub][i])
+                        yield
+                tile_max = b.fmax(mx, b.warp_shuffle_xor(mx, 32))
+                m_new = b.fmax(m_i, tile_max)
+                alpha = exp2(b.fsub(m_i, m_new))
+                st.update(s=s, m=m_new, alpha=alpha)
+                yield
+                o = list(o_acc)
+                for dt in range(D_TILES):
+                    for half in range(2):
+                        if half == 0:
+                            elems = []
+                        for i in range(8 * half, 8 * half + 8):
+                            prod = b.fmul(b.vec_extract(o[dt], i), alpha)
+                            if RESCALE_PLAIN:
+                                # Opaque to SLP: no v_pk_mul_f32 pairing.
+                                prod = b.optimization_barrier(prod)
+                            elems.append(prod)
+                        yield
+                    o[dt] = b.vec_pack(elems, F32)
+                st["o"] = o
+                st["pack"] = make_pack([exp_elem(0, j2) for j2 in range(4)])
+                yield
+                if PACK_AHEAD:
+                    packs = [st["pack"]]
+                    for kk in range(1, PACK_AHEAD + 1):
+                        elems = []
+                        for j2 in range(4):
+                            elems.append(exp_elem(kk, j2))
+                            if j2 % 2 == 1:
+                                yield
+                        packs.append(make_pack(elems))
+                    st["packs"] = packs
+
+            hv = head()
+            if PACK_AHEAD or QK_TAIL:
+                # Pace the head evenly over the QK(j+1) MFMAs kept above the mid
+                # barrier so none of it drains after them (the step count matches
+                # head()'s yields).
+                n_ticks = K_STEPS * N_SUB - QK_TAIL
+                n_head = (
+                    V_ITEMS + 8 * N_SUB + ((1 + N_SUB) if masked else 0)
+                    + 1 + 2 * D_TILES + 1 + 2 * PACK_AHEAD
+                )
+                done = 0
+                for i in range(n_ticks):
+                    next(qk_next)
+                    want = (i + 1) * n_head // n_ticks
+                    while done < want:
+                        next(hv, None)
+                        done += 1
+            else:
+                for _ in qk_next:
+                    next(hv, None)
+            for _ in hv:
+                pass
+            if spec.qkla_rhythm_b:
+                # 1 MFMA then N VALU, for every MFMA left above the mid barrier.
+                for _ in range(K_STEPS * N_SUB - QK_TAIL):
+                    b.sched_group_barrier(0x008, 1, 0)
+                    b.sched_group_barrier(0x002, spec.qkla_rhythm_b, 0)
+            # Keep the head (O rescale, exps) above the mid barrier: LLVM otherwise
+            # sinks it into the first PV packs, where the PV MFMAs wait on it.
+            b.sched_barrier(0)
+            # Publish V(j): every wave's writes land before any wave's PV(j).
+            b.sync_lds_only()
+
+            o = st["o"]
+            pack = st["pack"]
+            vals = []
+            v_steps = make_v_steps(vals)
+            k_steps = make_k_steps()
+            v_cur = [read_v(dt, 0) for dt in range(D_TILES)]
+            if spec.qkla_pv_spread:
+                # QK tail on every other PV MFMA; K DMA rows after the last one.
+                tail_at = {2 * i + 1 for i in range(QK_TAIL)}
+                k_lo = max(1, -(-(2 * QK_TAIL) // D_TILES))
+                # exps of packs PA+1..KK-1 spread evenly over PV MFMA slots
+                # [0, span); slot <= 4p-1 holds for every item of pack p.
+                items = [
+                    (pk, j2) for pk in range(PACK_AHEAD + 1, KK_STEPS) for j2 in range(4)
+                ]
+                span = D_TILES * (KK_STEPS - 1)
+                exp_at = {}
+                for i, it in enumerate(items):
+                    exp_at.setdefault(i * span // len(items), []).append(it)
+                packs = list(st["packs"]) if PACK_AHEAD else [st["pack"]]
+                packs += [None] * (KK_STEPS - len(packs))
+                pend = {}
+                for kk in range(KK_STEPS):
+                    nxt = kk + 1 < KK_STEPS
+                    v_nxt = (
+                        [read_v(dt, kk + 1) for dt in range(D_TILES)] if nxt else None
+                    )
+                    pack = packs[kk]
+                    if pack is None:
+                        raise AssertionError(f"pv_spread: pack {kk} not built in time")
+                    for dt in range(D_TILES):
+                        g = kk * D_TILES + dt
+                        o[dt] = mfma_32x32x8_for_dtype(b, dtype, v_cur[dt], pack, o[dt])
+                        if g in tail_at:
+                            next(qk_next, None)
+                        for pk, j2 in exp_at.get(g, ()):
+                            pend.setdefault(pk, []).append(exp_elem(pk, j2))
+                            if len(pend[pk]) == 4:
+                                packs[pk] = make_pack(pend.pop(pk))
+                        if k_lo <= kk <= k_lo + 1:
+                            next(k_steps, None)
+                        if kk == 3:
+                            next(v_steps, None)
+                        if spec.qkla_pv_fence == 2:
+                            b.sched_barrier(0)
+                    if spec.qkla_pv_fence == 1:
+                        b.sched_barrier(0)
+                    if nxt:
+                        v_cur = v_nxt
+            # K(j+2) DMA rows: PV packs 1..2, or right after the QK tail.
+            k_lo = max(1, -(-QK_TAIL // D_TILES))
+            for kk in (range(0) if spec.qkla_pv_spread else range(KK_STEPS)):
+                nxt = kk + 1 < KK_STEPS
+                ahead = nxt and kk + 1 <= PACK_AHEAD
+                v_nxt = [read_v(dt, kk + 1) for dt in range(D_TILES)] if nxt else None
+                elems = []
+                for dt in range(D_TILES):
+                    o[dt] = mfma_32x32x8_for_dtype(b, dtype, v_cur[dt], pack, o[dt])
+                    if QK_TAIL and kk * D_TILES + dt < QK_TAIL:
+                        next(qk_next, None)
+                    if nxt and not ahead:
+                        elems.append(exp_elem(kk + 1, dt))
+                    if k_lo <= kk <= k_lo + 1:
+                        next(k_steps, None)
+                    if kk == 3:
+                        next(v_steps, None)
+                if nxt:
+                    pack = st["packs"][kk + 1] if ahead else make_pack(elems)
+                    v_cur = v_nxt
+            for _ in k_steps:
+                pass
+            for _ in v_steps:
+                pass
+            for _ in qk_next:  # exhaust: publishes the S(j+1) accumulators
+                pass
+            l_tile = b.fadd(l_acc[0], b.warp_shuffle_xor(l_acc[0], 32))
+            l_new = b.fadd(b.fmul(l_i, st["alpha"]), l_tile)
+            return st["m"], l_new, o, vals
+
+        # Estimated issue cycles per unit, used only to size qkla_chunked chunks.
+        C_VST, C_MX, C_MSK, C_ALPHA, C_RS = 20, 2, 4, 28, 4
+        C_EXP, C_PACK, C_VRD, C_KDMA, C_VLD, C_SSC = 24, 40, 8, 12, 16, 4
+        N_KDMA = 8  # K DMA rows per wave per tile (D128 / BN64)
+        QKLA_CARRY = 2  # rev 3: PV MFMAs (the last ones of the last pack) carried
+
+        def carried_dts():
+            return list(range(D_TILES - QKLA_CARRY, D_TILES))
+
+        def zero_vpack():
+            return b.bitcast(b.vec_pack([b.const_i32(0)] * 2, I32), VectorType(BF16, 4))
+
+        def tile_chunked(j, m_i, l_i, o_acc, s_sc, v_store_steps, qk_next, s_out,
+                         masked, make_v_steps, make_k_steps, pend=None, pend_sink=None,
+                         v_pub=None, m_ahead=None, ma_sink=None):
+            """qkla_chunked: tile j from its carried scaled scores ``s_sc``. Every
+            MFMA is followed by a fenced chunk of about the region's mean estimated
+            cycles. Returns (m_new, l_new, o_acc, v_next, s_next) with S(j+1) scaled."""
+            exp2 = b.exp2_fast if spec.resolved_use_exp2_fast() else b.exp2
+
+            def fence():
+                # A hard scheduling boundary between chunks. s_setprio 0 keeps the
+                # default wave priority; sched_barrier(0) alone did not hold.
+                if spec.qkla_chunk_fence == 1:
+                    b.s_setprio(0)
+                else:
+                    b.sched_barrier(0)
+
+            PA = spec.qkla_pack_ahead
+            QT = spec.qkla_qk_tail
+            LAM = spec.qkla_lds_after_mfma
+            EVEN = spec.qkla_even
+            # qkla_even: B pacing costs = VALU issue cycles (V loads use no VALU)
+            C_VST_B = 16 if EVEN else C_VST
+            C_VLD_B = 4 if EVEN else C_VLD
+
+            def lds_after_mfma():
+                # this region: all VALU (addresses, perms), then the MFMA, then LDS
+                b.sched_group_barrier(0x002, 64, 0)
+                b.sched_group_barrier(0x008, 1, 0)
+                b.sched_group_barrier(0x080, 16, 0)
+            REV = spec.qkla_chunk_rev
+            CARRY = REV == 3
+            PLAN = REV in (2, 3, 4)  # fixed per-chunk PV plan
+            DEFER_ADD = REV in (4, 5)  # row-sum add delayed past the next exp
+
+            def s_scale(raw, i):
+                x = b.vec_extract(raw, i)
+                if REV == 5:
+                    # side-effecting pin: the multiply stays in the chunk it was put in
+                    # (plain fences let the compiler hoist it into an earlier chunk)
+                    x = b.inline_asm("", "=v,0", [x], F32, sideeffect=True)
+                return b.optimization_barrier(b.fmul(x, qk_scale))
+            o_acc = list(o_acc)
+            st = {}
+            l_acc = [b.const_f32(0.0)]
+
+            def make_pack(elems):
+                return _pack_p_bf16(b, elems) if PACK_P_BF16 else b.vec_pack(elems, dtype)
+
+            def exp_elem(kk, j2):
+                sv = st["s"]
+                # Pinned (opaque) so it stays in the chunk it was placed in.
+                diff = b.fsub(sv[kk // 4][(kk % 4) * 4 + j2], st["m"])
+                if REV >= 2 or spec.qkla_sub_pin:
+                    # opaque: keeps two subtracts from pairing into v_pk_add_f32
+                    diff = b.optimization_barrier(diff)
+                pv = b.optimization_barrier(exp2(diff))
+                if DEFER_ADD and st.get("defer_add"):
+                    # rev 4: add the PREVIOUS exp into the row sum now (same order),
+                    # so no VALU reads this exp's result right after it issues
+                    if st.get("pend_add") is not None:
+                        l_acc[0] = b.fadd(l_acc[0], st["pend_add"])
+                    st["pend_add"] = pv
+                else:
+                    l_acc[0] = b.fadd(l_acc[0], pv)
+                return pv if PACK_P_BF16 else b.cast_f32_to(pv, dtype)
+
+            # ---- above the mid barrier: head paced over the QK(j+1) MFMAs ----
+            vals = []
+            v_steps = make_v_steps(vals)
+            k_steps = make_k_steps()
+            LB_V = spec.qkla_loads_b
+            # qkla_max_ahead: carried S(j) row max in (unmasked tiles), S(j+1) max out
+            USE_MA_IN = m_ahead if (m_ahead is not None and not (masked and causal)) else None
+            MA_OUT = ma_sink is not None and not masked
+            ma = {"acc": neg_inf, "i": 0, "done": False}
+
+            def head():
+                for _ in v_store_steps:
+                    yield C_VST
+                sv = [[b.vec_extract(s_sc[n], i) for i in range(16)] for n in range(N_SUB)]
+                mx = neg_inf
+                MSK = masked and causal
+                if MSK:
+                    # do_mask's causal bound, one element at a time (same selects).
+                    tile_key0 = b.mul(j, b.const_i32(BN))
+                    query_tok = b.add(q_tok0, _mfma_32x32_c_col(b, lane, 0))
+                    if BR:
+                        query_tok = b.add(query_tok, diag_off)
+                for n in range(N_SUB if USE_MA_IN is None else 0):
+                    if MSK:
+                        sub_base = b.add(tile_key0, b.const_i32(n * 32))
+                    for i in range(16):
+                        if MSK:
+                            ktok = b.add(sub_base, _mfma_32x32_c_row(b, lane, i))
+                            sv[n][i] = b.select(b.cmp_le(ktok, query_tok), sv[n][i], neg_inf)
+                        mx = b.fmax(mx, sv[n][i])
+                        if not REV:
+                            yield C_MX + (C_MSK if MSK else 0)
+                        elif i % 2 == 1:
+                            # Two elements per unit (one v_max3); the opaque running
+                            # max keeps max3 fusion from pulling it into the next chunk.
+                            yield 2 * (C_MX + (C_MSK if MSK else 0))
+
+                tile_max = (USE_MA_IN if USE_MA_IN is not None
+                            else b.fmax(mx, b.warp_shuffle_xor(mx, 32)))
+                m_new = b.fmax(m_i, tile_max)
+                alpha = exp2(b.fsub(m_i, m_new))
+                st.update(s=sv, m=m_new, alpha=alpha)
+                yield C_ALPHA
+                if EVEN and spec.qkla_even_mix:
+                    yield from mixed_rescale_packs(alpha)
+                    return
+                o = list(o_acc)
+                for dt in range(D_TILES):
+                    elems = []
+                    for i in range(16):
+                        # Opaque to SLP: plain v_mul_f32 (a v_pk_mul_f32 cannot issue
+                        # while this wave's own MFMA holds the pipe).
+                        elems.append(
+                            b.optimization_barrier(b.fmul(b.vec_extract(o[dt], i), alpha))
+                        )
+                        yield C_RS
+                    o[dt] = b.vec_pack(elems, F32)
+                st["o"] = o
+                packs = []
+                for kk in range(PA + 1):
+                    if EVEN:
+                        # interleaved across the pack's 4 elements: no exp hazards
+                        ds = []
+                        for j2 in range(4):
+                            ds.append(b.optimization_barrier(
+                                b.fsub(sv[kk // 4][(kk % 4) * 4 + j2], st["m"])))
+                            yield 4
+                        ps = []
+                        for j2 in range(4):
+                            ps.append(b.optimization_barrier(exp2(ds[j2])))
+                            yield 16
+                        rr = []
+                        for j2 in range(4):
+                            l_acc[0] = b.fadd(l_acc[0], ps[j2])
+                            yield 4
+                        for j2 in range(4):
+                            rr.append(b.optimization_barrier(_bf16_round_bits(ps[j2])))
+                            yield 8
+                        words = []
+                        for h2 in range(2):
+                            words.append(b.perm_b32(rr[2 * h2], rr[2 * h2 + 1],
+                                                    b.const_i32(0x03020706)))
+                            yield 4
+                        packs.append(b.bitcast(b.vec_pack(words, I32), VectorType(BF16, 4)))
+                        continue
+                    elems = []
+                    for j2 in range(4):
+                        elems.append(exp_elem(kk, j2))
+                        yield C_EXP
+                    packs.append(make_pack(elems))
+                    yield C_PACK
+                st["packs"] = packs
+
+            def mixed_rescale_packs(alpha):
+                """qkla_even_mix: O rescale and pack-ahead stages merged by fraction done."""
+                sv = st["s"]
+                o = list(o_acc)
+                def g_rs():
+                    for dt in range(D_TILES):
+                        elems = []
+                        for i in range(16):
+                            elems.append(b.optimization_barrier(
+                                b.fmul(b.vec_extract(o[dt], i), alpha)))
+                            yield 4
+                        o[dt] = b.vec_pack(elems, F32)
+                    st["o"] = o
+                packs = []
+                def g_pk():
+                    for kk in range(PA + 1):
+                        ds = []
+                        for j2 in range(4):
+                            ds.append(b.optimization_barrier(
+                                b.fsub(sv[kk // 4][(kk % 4) * 4 + j2], st["m"])))
+                            yield 4
+                        ps = []
+                        for j2 in range(4):
+                            ps.append(b.optimization_barrier(exp2(ds[j2])))
+                            yield 16
+                        for j2 in range(4):
+                            l_acc[0] = b.fadd(l_acc[0], ps[j2])
+                            yield 4
+                        rr = [b.optimization_barrier(_bf16_round_bits(ps[j2])) for j2 in range(2)]
+                        yield 16
+                        rr += [b.optimization_barrier(_bf16_round_bits(ps[j2])) for j2 in range(2, 4)]
+                        yield 16
+                        words = [b.perm_b32(rr[2 * h2], rr[2 * h2 + 1], b.const_i32(0x03020706))
+                                 for h2 in range(2)]
+                        yield 8
+                        packs.append(b.bitcast(b.vec_pack(words, I32), VectorType(BF16, 4)))
+                    st["packs"] = packs
+                gens = [[g_rs(), 0, D_TILES * 16 * 4], [g_pk(), 0, (PA + 1) * 136]]
+                while gens:
+                    g = min(gens, key=lambda x: x[1] / x[2])
+                    c_ = next(g[0], None)
+                    if c_ is None:
+                        gens.remove(g)
+                        continue
+                    g[1] += c_
+                    yield c_
+
+            def _bf16_round_bits(e):
+                bits = b.bitcast(e, I32)
+                lsb = b.land(b.lshr(bits, b.const_i32(16)), b.const_i32(1))
+                return b.add(b.add(bits, b.const_i32(0x7FFF)), lsb)
+
+            def pv_even():
+                """qkla_even: PV(j) chunks filled to ~spec.qkla_even VALU cycles by an
+                earliest-deadline-first pick over fine-grained units."""
+                T = spec.qkla_even
+                o = st["o"]
+                packs = st["packs"] + [None] * (KK_STEPS - PA - 1)
+                n_s = KK_STEPS * D_TILES
+                vr = {0: st.pop("vr0") if "vr0" in st else [read_v(dt, 0) for dt in range(D_TILES)]}
+                next(qk_next, None)  # flush: QK(j+1) finished above the barrier
+                s_raw = list(s_out)
+                sv = st["s"]
+                s_flat = [None] * (N_SUB * 16)
+                U = []  # units: dict(cost, dead, deps, fn)
+
+                def add_u(cost, dead, deps, fn):
+                    U.append(dict(cost=cost, dead=dead, deps=deps, fn=fn, slot=None))
+                    return len(U) - 1
+                val = {}
+                for pk in range(PA + 1, KK_STEPS):
+                    dl = D_TILES * pk - 1  # pack pk complete one MFMA before its first use
+                    rid = []
+                    for j2 in range(4):
+                        key = (pk, j2)
+                        def f_sub(key=key):
+                            pk_, j_ = key
+                            val[("d",) + key] = b.optimization_barrier(
+                                b.fsub(sv[pk_ // 4][(pk_ % 4) * 4 + j_], st["m"]))
+                        def f_exp(key=key):
+                            val[("p",) + key] = b.optimization_barrier(exp2(val[("d",) + key]))
+                        def f_add(key=key):
+                            l_acc[0] = b.fadd(l_acc[0], val[("p",) + key])
+                        def f_rnd(key=key):
+                            val[("r",) + key] = b.optimization_barrier(
+                                _bf16_round_bits(val[("p",) + key]))
+                        u_sub = add_u(4, dl - 3, [], f_sub)
+                        u_exp = add_u(16, dl - 2, [u_sub], f_exp)
+                        add_u(4, n_s - 1, [u_exp], f_add)
+                        rid.append(add_u(8, dl - 1, [u_exp], f_rnd))
+                    for h2 in range(2):
+                        def f_word(pk=pk, h2=h2):
+                            w = b.perm_b32(val[("r", pk, 2 * h2)], val[("r", pk, 2 * h2 + 1)],
+                                           b.const_i32(0x03020706))
+                            val[("w", pk, h2)] = w
+                            if ("w", pk, 1 - h2) in val:
+                                ws = [val[("w", pk, 0)], val[("w", pk, 1)]]
+                                packs[pk] = b.bitcast(b.vec_pack(ws, I32), VectorType(BF16, 4))
+                        add_u(4, dl, [rid[2 * h2], rid[2 * h2 + 1]], f_word)
+                for r in range(N_KDMA):
+                    add_u(8, min(n_s - 1, 2 * r + 1), [], lambda: next(k_steps, None))
+                for e in range(N_SUB * 16):
+                    def f_ssc(e=e):
+                        n, i = divmod(e, 16)
+                        s_flat[e] = b.optimization_barrier(
+                            b.fmul(b.vec_extract(s_raw[n], i), qk_scale))
+                    add_u(4, n_s - 1, [], f_ssc)
+                done_u = set()
+                for si in range(n_s):
+                    kk, dt = divmod(si, D_TILES)
+                    if packs[kk] is None:
+                        raise AssertionError(f"qkla_even: pack {kk} late")
+                    o[dt] = mfma_32x32x8_for_dtype(b, dtype, vr[kk][dt], packs[kk], o[dt])
+                    if dt == 0 and kk + 1 < KK_STEPS:
+                        vr[kk + 1] = [read_v(d, kk + 1) for d in range(D_TILES)]
+                        if LAM:
+                            lds_after_mfma()
+                    fence()
+                    # even spread: this chunk takes (remaining work) / (remaining chunks)
+                    rem = sum(u["cost"] for u in U if u["slot"] is None)
+                    cap = rem / (n_s - si)
+                    ready = [i for i, u in enumerate(U) if u["slot"] is None
+                             and all(U[d]["slot"] is not None and U[d]["slot"] < si for d in u["deps"])]
+                    ready.sort(key=lambda i: (U[i]["dead"], i))
+                    took = 0
+                    for i in ready:
+                        u = U[i]
+                        must = u["dead"] <= si
+                        if must or (took < cap and took + u["cost"] / 2 <= cap) or took == 0:
+                            u["fn"]()
+                            u["slot"] = si
+                            done_u.add(i)
+                            took += u["cost"]
+                    if v_steps is not None and not LB_V and kk == 3:
+                        next(v_steps, None)
+                    fence()
+                left = [i for i, u in enumerate(U) if u["slot"] is None]
+                guard = 0
+                while left and guard < 8:
+                    for i in left:
+                        u = U[i]
+                        if all(U[d]["slot"] is not None for d in u["deps"]):
+                            u["fn"]()
+                            u["slot"] = n_s
+                    left = [i for i, u in enumerate(U) if u["slot"] is None]
+                    guard += 1
+                if left:
+                    raise AssertionError("qkla_even: unscheduled units")
+                for _ in k_steps:
+                    pass
+                s_next = [b.vec_pack(s_flat[16 * n : 16 * n + 16], F32) for n in range(N_SUB)]
+                l_tile = (l_acc[0] if spec.qkla_lhalf
+                          else b.fadd(l_acc[0], b.warp_shuffle_xor(l_acc[0], 32)))
+                l_new = b.fadd(b.fmul(l_i, st["alpha"]), l_tile)
+                return st["m"], l_new, o, vals, s_next
+
+            def pv_planned():
+                """rev 2 (no QK tail): a fixed per-chunk plan for PV(j). exps spread
+                evenly; each pair's bf16 word one chunk after its second exp (before
+                the pack's deadline); K(j+2) DMA rows on chunks 0..7; V reads two packs
+                ahead; S(j+1)'s scale fills the lightest chunks."""
+                o = st["o"]
+                packs = st["packs"] + [None] * (KK_STEPS - PA - 1)
+                n_s = KK_STEPS * D_TILES - (QKLA_CARRY if CARRY else 0)
+                last = n_s - 1
+                VRAP = 1 if CARRY else 2
+                plan = [[] for _ in range(n_s)]
+                cost = [0] * n_s
+                def put(si, unit, c):
+                    plan[si].append(unit)
+                    cost[si] += c
+                items = [(pk, j2) for pk in range(PA + 1, KK_STEPS) for j2 in range(4)]
+                span = D_TILES * (KK_STEPS - 1) - 2  # leave room for the last word
+                for i, it in enumerate(items):
+                    put(i * span // len(items), ("exp",) + it, C_EXP)
+                exp_at = {}
+                for si, units in enumerate(plan):
+                    for u in units:
+                        exp_at[(u[1], u[2])] = si
+                for pk in range(PA + 1, KK_STEPS):
+                    for h in range(2):
+                        si = max(exp_at[(pk, 2 * h)], exp_at[(pk, 2 * h + 1)]) + 1
+                        si = min(si, D_TILES * pk - 1)
+                        put(si, ("word", pk, h), C_PACK // 2)
+                for r in range(N_KDMA):
+                    put(min(r, last), ("kdma",), 24)  # measured: ~5 instr per row
+                # V reads: rev 4 reads pack p in two halves on separate chunks
+                vhalf = {}  # chunk -> list of (pack, half)
+                if REV == 4:
+                    for pk in range(1, KK_STEPS):
+                        if pk == 1:
+                            slots_h = [None, 0]  # half 0 before PV, half 1 on chunk 0
+                        else:
+                            slots_h = [D_TILES * (pk - 2) + 1, D_TILES * (pk - 2) + 3]
+                        for h, si in enumerate(slots_h):
+                            if si is not None:
+                                vhalf.setdefault(si, []).append((pk, h))
+                                cost[si] += C_VRD // 2
+                else:
+                    for kk in range(KK_STEPS - VRAP):
+                        cost[D_TILES * kk] += C_VRD
+                for e in range(N_SUB * 16):
+                    si = min(range(n_s), key=lambda k: (cost[k], k))
+                    put(si, ("ssc", e), C_SSC)
+                vr = {0: [read_v(dt, 0) for dt in range(D_TILES)]}
+                HALF = D_TILES // 2
+                if REV == 4:
+                    vr[1] = [read_v(dt, 1) if dt < HALF else None for dt in range(D_TILES)]
+                    st["defer_add"] = True
+                    st["pend_add"] = None
+                elif VRAP == 2 and KK_STEPS > 1:
+                    vr[1] = [read_v(dt, 1) for dt in range(D_TILES)]
+                next(qk_next, None)  # flush: QK(j+1) finished above the barrier
+                s_raw = list(s_out)
+                s_flat = [None] * (N_SUB * 16)
+                ev = {}
+                wl = {}
+                vals_pv = []
+                v_steps_pv = None if LB_V else make_v_steps(vals_pv)
+                for si in range(n_s):
+                    kk, dt = divmod(si, D_TILES)
+                    if REV == 4:
+                        for pk, h in vhalf.get(si, []):
+                            row = vr.setdefault(pk, [None] * D_TILES)
+                            for d in range(h * HALF, (h + 1) * HALF):
+                                row[d] = read_v(d, pk)
+                    elif dt == 0 and kk + VRAP < KK_STEPS:
+                        vr[kk + VRAP] = [read_v(d, kk + VRAP) for d in range(D_TILES)]
+                    if vr[kk][dt] is None:
+                        raise AssertionError(f"qkla_chunked rev4: V read for pack {kk} late")
+                    if packs[kk] is None:
+                        raise AssertionError(f"qkla_chunked rev2: pack {kk} late")
+                    o[dt] = mfma_32x32x8_for_dtype(b, dtype, vr[kk][dt], packs[kk], o[dt])
+                    fence()
+                    for u in plan[si]:
+                        if u[0] == "exp":
+                            ev[(u[1], u[2])] = exp_elem(u[1], u[2])
+                        elif u[0] == "word":
+                            pk, h = u[1], u[2]
+                            if PACK_P_BF16:
+                                wl.setdefault(pk, []).append(b.optimization_barrier(
+                                    _pack_p_bf16_word(b, ev[(pk, 2 * h)], ev[(pk, 2 * h + 1)])
+                                ))
+                                if len(wl[pk]) == 2:
+                                    packs[pk] = b.bitcast(
+                                        b.vec_pack(wl.pop(pk), I32), VectorType(BF16, 4)
+                                    )
+                            elif h == 1:
+                                packs[pk] = make_pack([ev[(pk, x)] for x in range(4)])
+                        elif u[0] == "kdma":
+                            next(k_steps, None)
+                        elif u[0] == "ssc":
+                            n, i = divmod(u[1], 16)
+                            s_flat[u[1]] = b.optimization_barrier(
+                                b.fmul(b.vec_extract(s_raw[n], i), qk_scale)
+                            )
+                    if v_steps_pv is not None and kk == 3:
+                        next(v_steps_pv, None)
+                    fence()
+                for _ in k_steps:
+                    pass
+                if v_steps_pv is not None:
+                    for _ in v_steps_pv:
+                        pass
+                s_next = [b.vec_pack(s_flat[16 * n : 16 * n + 16], F32) for n in range(N_SUB)]
+                if st.get("pend_add") is not None:
+                    l_acc[0] = b.fadd(l_acc[0], st["pend_add"])
+                    st["pend_add"] = None
+                l_tile = (l_acc[0] if spec.qkla_lhalf
+                          else b.fadd(l_acc[0], b.warp_shuffle_xor(l_acc[0], 32)))
+                l_new = b.fadd(b.fmul(l_i, st["alpha"]), l_tile)
+                if CARRY:
+                    if packs[KK_STEPS - 1] is None:
+                        raise AssertionError("qkla_chunked rev3: last pack not built")
+                    st["pend"] = [vr[KK_STEPS - 1][d] for d in carried_dts()] + [
+                        packs[KK_STEPS - 1]
+                    ]
+                return st["m"], l_new, o, (vals_pv if v_steps_pv is not None else vals), s_next
+
+            n_b = K_STEPS * N_SUB - QT + (QKLA_CARRY if CARRY else 0)
+            # K(j+2) DMA stays below the barrier: a QK(j+1) K read after a K DMA row
+            # waits vmcnt(0) (the scopes cannot tell the two slots apart).
+            LB_K = False
+            NVST = 0 if VDB else V_ITEMS  # qkla_vdb: no V(j) stores in B
+            VST_B = v_pub is not None and spec.qkla_vdb == 2
+            vst_b = v_pub(vals) if VST_B else None
+            tot_b = (
+                NVST * C_VST_B + (N_SUB * 16 * C_MSK if masked and causal else 0)
+                + (N_SUB * 16 * C_MX if USE_MA_IN is None else 0) + C_ALPHA + D_TILES * 16 * C_RS
+                + (PA + 1) * (4 * C_EXP + C_PACK)
+                + (V_ITEMS * C_VLD_B if LB_V else 0) + (N_KDMA * C_KDMA if LB_K else 0)
+                + (V_ITEMS * C_VST_B if VST_B else 0)
+            )
+            if spec.qkla_prio_bal:
+                b.s_setprio(spec.qkla_prio_bal)  # QK(j+1) region: high priority
+            hv = head()
+            done = 0
+            # head() yields: V stores, max pairs, alpha, rescale elements, pack exps+builds
+            n_units = (NVST + (N_SUB * (8 if REV else 16) if USE_MA_IN is None else 0)
+                       + 1 + D_TILES * 16 + (PA + 1) * (18 if EVEN else 5))
+            used = 0
+            if CARRY:
+                next(qk_next)  # rev 3: QK(j+1)'s first K reads, no MFMA yet
+                cdts = carried_dts()
+            for i in range(n_b):
+                if CARRY and i < QKLA_CARRY:
+                    # rev 3: tile j-1's last PV MFMAs (registers only), before the
+                    # head rescales O
+                    dtc = cdts[i]
+                    o_acc[dtc] = mfma_32x32x8_for_dtype(b, dtype, pend[i], pend[-1], o_acc[dtc])
+                else:
+                    next(qk_next)
+                if LAM and i >= 1:
+                    # V(j+1) stores join the MFMA region (their perms/addresses go
+                    # before the MFMA, the ds_writes right after it)
+                    if VST_B and i >= n_b // 2 and next(vst_b, "end") != "end":
+                        done += C_VST_B
+                    if i == n_b - 1:
+                        st["vr0"] = [read_v(dt, 0) for dt in range(D_TILES)]
+                    lds_after_mfma()
+                fence()  # the MFMA stays at the head of its chunk
+                # V(j+1) loads: rev < 2 one per chunk from the tile start; rev 2
+                # spread evenly over B (they are only needed by the next tile)
+                VS0, VSS = spec.qkla_vld_start, spec.qkla_vld_stride
+                if LB_V and i >= VS0 and (i - VS0) % VSS == 0 and next(v_steps, "end") != "end":
+                    done += C_VLD_B
+                # qkla_vdb 2: V(j+1) -> slot (j+1)%2, one item per chunk in B's
+                # 2nd half (its loads were issued in the first chunks)
+                if VST_B and not LAM and i >= n_b // 2 and next(vst_b, "end") != "end":
+                    done += C_VST_B
+                first = bool(REV)
+                # at least one unit per chunk, and never so many that fewer units
+                # remain than MFMAs still to cover
+                while first or (
+                    done < (i + 1) * tot_b / n_b
+                    and (not REV or n_units - used > n_b - i - 1)
+                ):
+                    first = False
+                    c = next(hv, None)
+                    if c is None:
+                        break
+                    done += c
+                    used += 1
+                fence()
+            for _ in hv:
+                pass
+            if VST_B:
+                for _ in vst_b:
+                    pass
+            b.sched_barrier(0)
+            if spec.qkla_prio_bal:
+                b.s_setprio(0)  # PV(j): yield arbitration to a wave still in QK(j+1)
+            # Publish V(j): every wave's writes land before any wave's PV(j).
+            # qkla_vdb: V(j) was published by the previous end barrier.
+            if not VDB:
+                b.sync_lds_only()
+
+            # ---- below the mid barrier: PV + QK tail MFMAs, fenced chunks ----
+            if EVEN and QT == 0:
+                return pv_even()
+            if PLAN and QT == 0:
+                res = pv_planned()
+                if CARRY and pend_sink is not None:
+                    pend_sink.extend(st["pend"])
+                return res
+            o = st["o"]
+            packs = st["packs"] + [None] * (KK_STEPS - PA - 1)
+            slots = []
+            for kk in range(KK_STEPS):
+                for dt in range(D_TILES):
+                    slots.append(("pv", kk, dt))
+                    if kk * D_TILES + dt < 2 * QT and (kk * D_TILES + dt) % 2 == 0:
+                        slots.append(("qk",))
+            last_qk = max([i for i, x in enumerate(slots) if x[0] == "qk"], default=-1)
+            first_of = {x[1]: i for i, x in reversed(list(enumerate(slots))) if x[0] == "pv"}
+            items = [(pk, j2) for pk in range(PA + 1, KK_STEPS) for j2 in range(4)]
+            # qkla_vdb: V(j+1) -> its own slot, one item per chunk in PV's 2nd half
+            vst = v_pub(vals) if v_pub is not None and spec.qkla_vdb == 1 else None
+            vst_live = [vst is not None]
+            tot_pv = (
+                len(items) * C_EXP + (KK_STEPS - PA - 1) * C_PACK
+                + (KK_STEPS - 1) * C_VRD + (0 if LB_K else N_KDMA * C_KDMA)
+                + (0 if LB_V else V_ITEMS * C_VLD) + N_SUB * 16 * C_SSC
+                + (V_ITEMS * C_VST if vst is not None else 0)
+                + (N_SUB * 16 * C_MX + 8 if MA_OUT else 0)
+            )
+            tgt = tot_pv / len(slots)
+            s_raw = []
+            s_flat = []
+            vr = {0: st.pop("vr0") if "vr0" in st else [read_v(dt, 0) for dt in range(D_TILES)]}
+            VRA = 2 if PLAN else 1  # V reads this many packs ahead
+            if DEFER_ADD:
+                st["defer_add"] = True
+                st["pend_add"] = None
+            if VRA == 2 and KK_STEPS > 1:
+                vr[1] = [read_v(dt, 1) for dt in range(D_TILES)]
+            ei = 0
+            pend = []
+            tail_done = last_qk < 0
+            if tail_done:
+                next(qk_next, None)  # flush: QK(j+1) finished above the barrier
+            k_live = [True]
+            v_live = [True]
+            done = 0
+
+            words = []
+            ready = []  # rev 2: (pack, e0, e1) pairs whose rounding is not yet emitted
+            wpk = {}
+
+            def build_word(pk, e0, e1):
+                wpk.setdefault(pk, []).append(
+                    b.optimization_barrier(_pack_p_bf16_word(b, e0, e1))
+                )
+                if len(wpk[pk]) == 2:
+                    packs[pk] = b.bitcast(b.vec_pack(wpk.pop(pk), I32), VectorType(BF16, 4))
+                return C_PACK // 2
+
+            def flush_pack(pk):
+                c = 0
+                while ready and ready[0][0] <= pk:
+                    c += build_word(*ready.pop(0))
+                return c
+
+            def emit_exp():
+                nonlocal ei
+                pk, j2 = items[ei]
+                ei += 1
+                e = exp_elem(pk, j2)
+                c = C_EXP
+                if REV >= 2 and PACK_P_BF16:
+                    # round the previous pair now, after this exp: its exp results
+                    # have had time to finish
+                    if ready:
+                        c += build_word(*ready.pop(0))
+                    pend.append(e)
+                    if len(pend) == 2:
+                        ready.append((pk, pend[0], pend[1]))
+                        pend.clear()
+                    return c
+                pend.append(e)
+                if PACK_P_BF16 and len(pend) == 2:
+                    # Half of the pack: one word now, so the chain is not one lump.
+                    words.append(
+                        b.optimization_barrier(_pack_p_bf16_word(b, pend[0], pend[1]))
+                    )
+                    pend.clear()
+                    c += C_PACK // 2
+                    if len(words) == 2:
+                        packs[pk] = b.bitcast(
+                            b.vec_pack(list(words), I32), VectorType(BF16, 4)
+                        )
+                        words.clear()
+                elif not PACK_P_BF16 and len(pend) == 4:
+                    packs[pk] = make_pack(list(pend))
+                    pend.clear()
+                    c += C_PACK
+                return c
+
+            def emit_load(gen, live, cost):
+                if live[0] and next(gen, "end") != "end":
+                    return cost
+                live[0] = False
+                return 0
+
+            def ma_unit():
+                """qkla_max_ahead: one v_max3 pair of S(j+1) (once scaled), then the
+                cross-half shuffle; 0 when nothing is ready."""
+                if not MA_OUT or ma["done"]:
+                    return 0
+                if ma["i"] + 2 <= len(s_flat):
+                    x0, x1 = s_flat[ma["i"]], s_flat[ma["i"] + 1]
+                    ma["acc"] = b.optimization_barrier(b.fmax(b.fmax(ma["acc"], x0), x1))
+                    ma["i"] += 2
+                    return 2 * C_MX
+                if ma["i"] == N_SUB * 16:
+                    ma["out"] = b.fmax(ma["acc"], b.warp_shuffle_xor(ma["acc"], 32))
+                    ma["done"] = True
+                    return 8
+                return 0
+
+            for si, slot in enumerate(slots):
+                if slot[0] == "pv":
+                    kk, dt = slot[1], slot[2]
+                    if dt == 0 and kk + VRA < KK_STEPS:
+                        vr[kk + VRA] = [read_v(d, kk + VRA) for d in range(D_TILES)]
+                        done += C_VRD
+                    if packs[kk] is None and REV >= 2:
+                        done += flush_pack(kk)
+                    if packs[kk] is None:
+                        raise AssertionError(f"qkla_chunked: pack {kk} late")
+                    o[dt] = mfma_32x32x8_for_dtype(b, dtype, vr[kk][dt], packs[kk], o[dt])
+                    if LAM and dt == 0 and kk + VRA < KK_STEPS:
+                        lds_after_mfma()
+                else:
+                    next(qk_next)
+                fence()  # the MFMA stays at the head of its chunk
+                if si == last_qk:
+                    next(qk_next, None)  # flush the S(j+1) accumulators
+                    tail_done = True
+                if tail_done and not s_raw:
+                    s_raw = list(s_out)
+                done_before = done
+                # K(j+2) DMA: one row per chunk as soon as the tail's K reads are
+                # done, so it lands well before the end barrier's vmcnt(0).
+                if REV and tail_done and k_live[0]:
+                    done += emit_load(k_steps, k_live, C_KDMA)
+                if vst_live[0] and si >= len(slots) // 2:
+                    done += emit_load(vst, vst_live, C_VST)
+                # exps whose pack the next slot needs
+                while ei < len(items):
+                    pk = items[ei][0]
+                    if first_of[pk] > si + 1:
+                        break
+                    done += emit_exp()
+                # keep the exps on an even schedule up to the last pack's deadline
+                due = min(len(items), -(-(si + 1) * len(items) // first_of[KK_STEPS - 1]))
+                while ei < due:
+                    done += emit_exp()
+                if REV >= 2 and si + 1 < len(slots) and slots[si + 1][0] == "pv":
+                    nk = slots[si + 1][1]
+                    if packs[nk] is None:
+                        # finish the next MFMA's pack one chunk ahead of it
+                        done += flush_pack(nk)
+                if REV >= 2 and ei >= len(items) and tail_done and s_raw:
+                    # rev 2: S(j+1)'s scale split evenly over the remaining chunks
+                    left = N_SUB * 16 - len(s_flat)
+                    take = -(-left // (len(slots) - si)) if left else 0
+                    for _ in range(take):
+                        n, i = divmod(len(s_flat), 16)
+                        s_flat.append(
+                            s_scale(s_raw[n], i)
+                        )
+                        done += C_SSC
+                # rev 1: K DMA handled above; V loads were issued in B
+                one_load = bool(REV)
+
+                def next_cost():
+                    if ei < len(items):
+                        return C_EXP + (C_PACK // 2 if PACK_P_BF16 and len(pend) == 1 else 0)
+                    return C_SSC
+
+                # add a unit only while it brings the chunk closer to the target
+                while done + next_cost() / 2 < (si + 1) * tgt:
+                    if not one_load and tail_done and k_live[0]:
+                        c = emit_load(k_steps, k_live, C_KDMA)
+                        if c:
+                            done += c
+                            one_load = True
+                            continue
+                    if not one_load and v_live[0]:
+                        c = emit_load(v_steps, v_live, C_VLD)
+                        if c:
+                            done += c
+                            one_load = True
+                            continue
+                    if ei < len(items):
+                        done += emit_exp()
+                        continue
+                    if tail_done and len(s_flat) < N_SUB * 16 and s_raw:
+                        n, i = divmod(len(s_flat), 16)
+                        s_flat.append(
+                            s_scale(s_raw[n], i)
+                        )
+                        done += C_SSC
+                        continue
+                    c_ma = ma_unit()
+                    if c_ma:
+                        done += c_ma
+                        continue
+                    c = (emit_load(k_steps, k_live, C_KDMA) if tail_done else 0) or emit_load(
+                        v_steps, v_live, C_VLD
+                    )
+                    if not c:
+                        break
+                    done += c
+                if REV and done == done_before:
+                    # at least one unit per chunk: no MFMA without work after it
+                    if ei < len(items):
+                        done += emit_exp()
+                    elif tail_done and len(s_flat) < N_SUB * 16 and s_raw:
+                        n, i = divmod(len(s_flat), 16)
+                        s_flat.append(
+                            s_scale(s_raw[n], i)
+                        )
+                        done += C_SSC
+                    else:
+                        done += ma_unit()
+                fence()
+            while ei < len(items):
+                emit_exp()
+            flush_pack(KK_STEPS)
+            for _ in k_steps:
+                pass
+            for _ in v_steps:
+                pass
+            if vst is not None:
+                for _ in vst:
+                    pass
+            if not s_raw:
+                s_raw = list(s_out)
+            while len(s_flat) < N_SUB * 16:
+                n, i = divmod(len(s_flat), 16)
+                s_flat.append(
+                    s_scale(s_raw[n], i)
+                )
+            while ma_unit():
+                pass
+            if MA_OUT:
+                ma_sink.append(ma["out"])
+            s_next = [b.vec_pack(s_flat[16 * n : 16 * n + 16], F32) for n in range(N_SUB)]
+            if st.get("pend_add") is not None:
+                l_acc[0] = b.fadd(l_acc[0], st["pend_add"])
+                st["pend_add"] = None
+            l_tile = (l_acc[0] if spec.qkla_lhalf
+                      else b.fadd(l_acc[0], b.warp_shuffle_xor(l_acc[0], 32)))
+            l_new = b.fadd(b.fmul(l_i, st["alpha"]), l_tile)
+            return st["m"], l_new, o, vals, s_next
+
         def tile_compute(j, carry, masked):
             """Score, mask, online-softmax and PV for one staged tile; returns
             ``(m, l, *O)``."""
@@ -2392,14 +4135,242 @@ def _build_attention_dense_single_buffer(
                     payload.append((d0, t0, x0, x1))
                 _cfvst_store_v(payload)
 
+            def _vdb_store_steps(values):
+                """qkla_vdb V(j+1) store: per tile 2 bases (rows d0, d0+1 with slot
+                and swizzle folded in), then the item's token offset it*2*WAVES by
+                XOR (disjoint from wave*2's bits, so (wave*2 + c) ^ s == c ^ (wave*2 ^ s))."""
+                d0 = b.mul(lane, b.const_i32(2))
+                w2 = b.mul(wave, b.const_i32(2))
+                slot_e = b.mul(V_SLOT["w"], b.const_i32(D * V_LDROW))
+                bases = []
+                for r in range(2):
+                    dr = d0 if r == 0 else b.add(d0, b.const_i32(1))
+                    sw = b.shl(b.land(dr, b.const_i32(V_SWZ_MASK)), b.const_i32(2))
+                    bases.append(b.add(
+                        b.add(slot_e, b.mul(dr, b.const_i32(V_LDROW))), b.xor(w2, sw)
+                    ))
+                for it, (x0, x1) in enumerate(values):
+                    rows = (
+                        b.perm_b32(x0, x1, b.const_i32(0x01000504)),
+                        b.perm_b32(x0, x1, b.const_i32(0x03020706)),
+                    )
+                    c = it * 2 * WAVES
+                    for r in range(2):
+                        e = bases[r] if c == 0 else b.xor(bases[r], b.const_i32(c))
+                        b.smem_store_vN(
+                            V_lds, [b.const_i32(0), b.const_i32(0), e],
+                            b.bitcast(rows[r], VectorType(dtype, 2)), 2,
+                        )
+                    yield
+
+            def publish_v_steps(values):
+                """publish_prefetched_v one item per step (tilv_v_write_qk)."""
+                if V_SLOT["w"] is not None and SWZ_V:
+                    yield from _vdb_store_steps(values)
+                    return
+                for it, (x0, x1) in enumerate(values):
+                    t0 = b.add(
+                        b.mul(wave, b.const_i32(2)),
+                        b.const_i32(it * 2 * WAVES),
+                    )
+                    d0 = b.mul(lane, b.const_i32(2))
+                    _cfvst_store_v([(d0, t0, x0, x1)])
+                    yield
+
+            VWQ = spec.tilv_v_write_qk
+            QKLA = spec.qk_lookahead
+
             # Prologue: prepare K[0] and publish V[0]. All waves rendezvous
             # after draining their VMEM and after V's LDS writes complete.
             zero = b.const_i32(0)
+            if spec.q_batch_wait:
+                b.s_waitcnt(vmcnt=0)  # Q batch lands before K/V are issued
             load_pipeline_k(zero, zero)
+            if QKLA:
+                # K[1] -> slot 1 (clamped); QK(0) runs here, S(0) is carried.
+                la_last = b.sub(n_up, b.const_i32(1))
+                one = b.const_i32(1)
+                load_pipeline_k(one, b.smin(one, la_last))
             v0 = _cfvst_load_v_pipeline(zero)
-            b.s_waitcnt(vmcnt=0)
-            publish_prefetched_v(v0)
-            b.sync_lds_only()
+            SPLITW = spec.qkla_split_wait
+            if SPLITW:
+                # Q (8 dwordx4) + K(0) (ROWS_PER_WAVE DMAs) were issued first; leave
+                # K(1)'s DMAs and V(0)'s 2 * V_ITEMS loads in flight across QK(0).
+                assert ROWS_PER_INSTR == 1
+                b.s_waitcnt(vmcnt=ROWS_PER_WAVE + 2 * V_ITEMS)
+            else:
+                b.s_waitcnt(vmcnt=0)
+            if spec.q_lds_stage:
+                # V_lds is free until the barrier below (V[0] is published after
+                # it). Per wave 32 rows x 32 dims per quarter, 8 B chunks XORed
+                # with (row >> 1) & 7 so the MFMA-layout reads are conflict-free.
+                q_base_e = b.mul(wave, b.const_i32(1024))
+                if VDB:  # slot 0 takes V(0) below; stage Q in slot 1
+                    q_base_e = b.add(q_base_e, b.const_i32(D * V_LDROW))
+            if spec.q_lds_stage and spec.q_full_line:
+                # Per wave 32 rows x 64 dims (one half of D) in both V slots
+                # (wave * 2048 elements; V(0) is published after QK(0)). 16 B
+                # chunks XORed with row & 7: a ds_write_b128 pass (8 lanes, one
+                # row) and a ds_read_b128 pass (8 rows, one chunk) both hit 8
+                # distinct 16 B slots. q_packs come out in the KB128 order.
+                assert VDB and 2 * D * V_LDROW >= WAVES * 2048
+                q_base_e = b.mul(wave, b.const_i32(2048))
+                lane_q = b.optimization_barrier(lane)
+                r_sw = b.land(b.mod(lane_q, b.const_i32(32)), b.const_i32(7))
+                q_lrow = b.div(lane_q, b.const_i32(8))
+                q_lc = b.mod(lane_q, b.const_i32(8))
+                for h in range(2):
+                    for i in range(4):
+                        row = b.add(b.const_i32(i * 8), q_lrow)
+                        w_sw = b.land(row, b.const_i32(7))
+                        e = b.add(
+                            b.add(q_base_e, b.mul(row, b.const_i32(64))),
+                            b.mul(b.xor(q_lc, w_sw), b.const_i32(8)),
+                        )
+                        b.smem_store_vN(
+                            V_lds, [b.const_i32(0), b.const_i32(0), e],
+                            q_raw[h * 4 + i], 8,
+                        )
+                    for pq in range(2):
+                        for tt in range(2):
+                            ch = b.xor(
+                                b.add(b.const_i32(pq * 4 + tt * 2), lane_h), r_sw
+                            )
+                            e = b.add(
+                                b.add(q_base_e, b.mul(lane_m, b.const_i32(64))),
+                                b.mul(ch, b.const_i32(8)),
+                            )
+                            v8 = b.smem_load_vN(
+                                V_lds, b.const_i32(0), b.const_i32(0), e,
+                                dtype=dtype, n=8,
+                            )
+                            for half in range(2):
+                                q_packs.append(
+                                    b.vec_pack(
+                                        [b.vec_extract(v8, half * 4 + k)
+                                         for k in range(4)],
+                                        dtype,
+                                    )
+                                )
+            elif spec.q_lds_stage and KB128:
+                # Paired b128 layout: lane (row lane_m, half h) needs dims
+                # 16t + 8h .. +7 for t = 0..7. Per quarter p (t = 2p, 2p+1) the
+                # 64 B row holds four 16 B chunks, XORed with (row >> 1) & 3 so the
+                # ds_read_b128 (8 lanes = 8 rows per pass) hits 8 distinct slots.
+                q_lrow = b.div(lane, b.const_i32(4))
+                q_lc = b.mod(lane, b.const_i32(4))
+                r_sw = b.land(b.lshr(lane_m, b.const_i32(1)), b.const_i32(3))
+                for p in range(4):
+                    for i in range(2):
+                        row = b.add(b.const_i32(i * 16), q_lrow)
+                        w_sw = b.land(b.lshr(row, b.const_i32(1)), b.const_i32(3))
+                        e = b.add(
+                            b.add(q_base_e, b.mul(row, b.const_i32(32))),
+                            b.mul(b.xor(q_lc, w_sw), b.const_i32(8)),
+                        )
+                        b.smem_store_vN(
+                            V_lds, [b.const_i32(0), b.const_i32(0), e],
+                            q_raw[p * 2 + i], 8,
+                        )
+                    for tt in range(2):
+                        ch = b.xor(b.add(b.const_i32(tt * 2), lane_h), r_sw)
+                        e = b.add(
+                            b.add(q_base_e, b.mul(lane_m, b.const_i32(32))),
+                            b.mul(ch, b.const_i32(8)),
+                        )
+                        v8 = b.smem_load_vN(
+                            V_lds, b.const_i32(0), b.const_i32(0), e, dtype=dtype, n=8
+                        )
+                        for half in range(2):
+                            q_packs.append(
+                                b.vec_pack(
+                                    [b.vec_extract(v8, half * 4 + k) for k in range(4)],
+                                    dtype,
+                                )
+                            )
+            elif spec.q_lds_stage:
+                q_lrow = b.div(lane, b.const_i32(4))
+                q_lch = b.mul(b.mod(lane, b.const_i32(4)), b.const_i32(2))
+                r_sw = b.land(b.lshr(lane_m, b.const_i32(1)), b.const_i32(7))
+                for p in range(4):
+                    for i in range(2):
+                        row = b.add(b.const_i32(i * 16), q_lrow)
+                        w_sw = b.land(b.lshr(row, b.const_i32(1)), b.const_i32(7))
+                        v8 = q_raw[p * 2 + i]
+                        for hh in range(2):
+                            ch = b.xor(b.add(q_lch, b.const_i32(hh)), w_sw)
+                            e = b.add(
+                                b.add(q_base_e, b.mul(row, b.const_i32(32))),
+                                b.mul(ch, b.const_i32(4)),
+                            )
+                            b.smem_store_vN(
+                                V_lds,
+                                [b.const_i32(0), b.const_i32(0), e],
+                                b.vec_pack(
+                                    [b.vec_extract(v8, hh * 4 + t) for t in range(4)],
+                                    dtype,
+                                ),
+                                4,
+                            )
+                    for kq in range(4):
+                        ch = b.xor(b.add(b.const_i32(kq * 2), lane_h), r_sw)
+                        e = b.add(
+                            b.add(q_base_e, b.mul(lane_m, b.const_i32(32))),
+                            b.mul(ch, b.const_i32(4)),
+                        )
+                        q_packs.append(
+                            b.smem_load_vN(
+                                V_lds, b.const_i32(0), b.const_i32(0), e,
+                                dtype=dtype, n=4,
+                            )
+                        )
+            if QKLA:
+                if VDB and not SPLITW:
+                    publish_prefetched_v(v0)  # V(0) -> slot 0
+                b.sync_lds_only()
+                s_acc0 = []
+                for _ in qk_raw_steps(zero, s_acc0):
+                    pass
+                if SPLITW:
+                    # K(1) + V(0) landed during QK(0); publish V(0) -> slot 0 and
+                    # K(1) (other waves' DMAs) before tile 0 reads them. The
+                    # sched_barrier keeps all QK(0) MFMAs ahead of the wait.
+                    b.sched_barrier(0)
+                    b.s_waitcnt(vmcnt=0)
+                    publish_prefetched_v(v0)
+                    b.sync_lds_only()
+                if spec.qkla_chunked:
+                    s_acc0 = [
+                        b.vec_pack(
+                            [b.fmul(b.vec_extract(a, i), qk_scale) for i in range(16)], F32
+                        )
+                        for a in s_acc0
+                    ]
+                iter_args = iter_args + ([] if VDB else [
+                    (f"vp{k}", x) for k, x in enumerate(x for pr in v0 for x in pr)
+                ]) + [(f"sa{nsub}", s_acc0[nsub]) for nsub in range(N_SUB)]
+                if spec.qkla_max_ahead:
+                    mx0 = neg_inf
+                    for a_ in s_acc0:
+                        for i_ in range(16):
+                            mx0 = b.fmax(mx0, b.vec_extract(a_, i_))
+                    ma0 = b.fmax(mx0, b.warp_shuffle_xor(mx0, 32))
+                if spec.qkla_chunked and spec.qkla_chunk_rev == 3:
+                    # rev 3: no previous tile -> zero pending PV (adds exactly 0)
+                    iter_args = iter_args + [
+                        (f"cv{k}", zero_vpack()) for k in range(QKLA_CARRY)
+                    ] + [("cp", zero_vpack())]
+                if spec.qkla_max_ahead:
+                    iter_args = iter_args + [("ma", ma0)]  # last carried value
+            elif VWQ:
+                # V[0] stays in registers; tile 0 writes it during its QK nsub0.
+                b.sync_lds_only()
+                iter_args = iter_args + [
+                    (f"vp{k}", x) for k, x in enumerate(x for pr in v0 for x in pr)
+                ]
+            else:
+                publish_prefetched_v(v0)
+                b.sync_lds_only()
 
             # Main loop deliberately excludes the final KV tile. n_up=1 makes
             # this a zero-trip loop; its prologue and epilogue still execute.
@@ -2418,19 +4389,105 @@ def _build_attention_dense_single_buffer(
                 # or the preceding iteration. With one K slot, do not overwrite
                 # it until *all* waves have completed current-tile LDS reads.
                 kbuf = b.mod(j, b.const_i32(K_BUFS))
-                s = do_qk(kbuf)
-                next_j = b.add(j, b.const_i32(1))
-                next_kbuf = b.mod(next_j, b.const_i32(K_BUFS))
-                if USE_KDB:
-                    # Distinct LDS slot: K[j+1] DMA overlaps current softmax/PV.
-                    load_pipeline_k(next_kbuf, next_j)
-                if USE_VPF:
-                    # Only V data (not addresses) stays live across softmax/PV.
-                    v_next = _cfvst_load_v_pipeline(next_j)
-                # The pipeline cohort has no sliding window, so masked=True
-                # applies only the causal upper bound.
-                m_new, l_new, o_acc = softmax_pv(s, j, m_i, l_i, o_acc, masked)
+                if QKLA:
+                    # S(j) arrives in the carry; QK(j+1) reads slot (j+1)%2 (its DMA
+                    # landed before the previous end barrier). Slot j%2 was last read
+                    # by QK(j) before the previous mid barrier, so K[j+2] (clamped:
+                    # a harmless reload into the idle slot) lands there.
+                    nv = 0 if VDB else 2 * V_ITEMS
+                    pv_flat = carry[2 + D_TILES : 2 + D_TILES + nv]
+                    v_cur = [(pv_flat[2 * i], pv_flat[2 * i + 1])
+                             for i in range(0 if VDB else V_ITEMS)]
+                    s_acc = list(carry[2 + D_TILES + nv : 2 + D_TILES + nv + N_SUB])
+                    MAXA = spec.qkla_max_ahead
+                    ma_in = carry[-1] if MAXA else None
+                    pend_in = list(carry[2 + D_TILES + nv + N_SUB : len(carry) - (1 if MAXA else 0)])
+                    ma_out = [] if MAXA else None
+                    next_j = b.add(j, b.const_i32(1))
+                    next_kbuf = b.mod(next_j, b.const_i32(K_BUFS))
+                    s_next = []
+                    k2 = b.smin(b.add(j, b.const_i32(2)), last_j)
+                    pend_out = []
+                    if spec.qkla_chunked:
+                        rev3 = spec.qkla_chunk_rev == 3
+                        if VDB:
+                            # PV(j) reads slot j%2 (V(j) is already there); V(j+1)
+                            # goes to slot (j+1)%2, whose last readers (PV(j-1))
+                            # are all past the previous end barrier. The end
+                            # barrier below publishes it for PV(j+1).
+                            V_SLOT["r"] = b.mod(j, b.const_i32(2))
+                            V_SLOT["w"] = b.mod(next_j, b.const_i32(2))
+                            V_SLOT["rb"] = None
+                        m_new, l_new, o_acc, v_next, s_next = tile_chunked(
+                            j, m_i, l_i, o_acc, s_acc,
+                            iter(()) if VDB else publish_v_steps(v_cur),
+                            qk_raw_steps(next_kbuf, s_next, preyield=rev3), s_next, masked,
+                            lambda vals: _cfvst_load_v_pipeline_steps(next_j, vals),
+                            lambda: load_pipeline_k_steps(kbuf, k2),
+                            pend=pend_in if rev3 else None,
+                            pend_sink=pend_out if rev3 else None,
+                            v_pub=publish_v_steps if VDB else None,
+                            m_ahead=ma_in, ma_sink=ma_out,
+                        )
+                        V_SLOT["r"] = V_SLOT["w"] = V_SLOT["rb"] = None
+                    else:
+                        m_new, l_new, o_acc, v_next = tile_la(
+                            j, m_i, l_i, o_acc, s_acc, publish_v_steps(v_cur),
+                            qk_raw_steps(next_kbuf, s_next), masked,
+                            lambda vals: _cfvst_load_v_pipeline_steps(next_j, vals),
+                            lambda: load_pipeline_k_steps(kbuf, k2),
+                        )
+                    b.s_waitcnt(vmcnt=0)
+                    b.sync_lds_only()
+                    if spec.qkla_rhythm_pv:
+                        # 1 MFMA then N VALU over the PV region (PV + QK tail MFMAs).
+                        for _ in range(KK_STEPS * D_TILES + spec.qkla_qk_tail):
+                            b.sched_group_barrier(0x008, 1, 0)
+                            b.sched_group_barrier(0x002, spec.qkla_rhythm_pv, 0)
+                    b.scf_yield(
+                        m_new, l_new, *o_acc,
+                        *([] if VDB else [x for pr in v_next for x in pr]), *s_next,
+                        *pend_out,
+                        *([(ma_out[0] if ma_out else ma_in)] if MAXA else []),
+                    )
+                    return
+                if VWQ:
+                    pv_flat = carry[2 + D_TILES:]
+                    v_cur = [(pv_flat[2 * i], pv_flat[2 * i + 1]) for i in range(V_ITEMS)]
+                if spec.tile_interleave and not masked:
+                    next_j = b.add(j, b.const_i32(1))
+                    next_kbuf = b.mod(next_j, b.const_i32(K_BUFS))
+                    m_new, l_new, o_acc, v_next = tile_ilv(
+                        kbuf, j, m_i, l_i, o_acc,
+                        lambda vals: _cfvst_load_v_pipeline_steps(next_j, vals),
+                        lambda: load_pipeline_k_steps(next_kbuf, next_j),
+                        v_store_steps=publish_v_steps(v_cur) if VWQ else None,
+                    )
+                else:
+                    if VWQ:
+                        # Masked tile: publish V(j) up front (not interleaved).
+                        publish_prefetched_v(v_cur)
+                        b.sync_lds_only()
+                    s = do_qk(kbuf)
+                    next_j = b.add(j, b.const_i32(1))
+                    next_kbuf = b.mod(next_j, b.const_i32(K_BUFS))
+                    if USE_KDB:
+                        # Distinct LDS slot: K[j+1] DMA overlaps current softmax/PV.
+                        load_pipeline_k(next_kbuf, next_j)
+                    if USE_VPF:
+                        # Only V data (not addresses) stays live across softmax/PV.
+                        v_next = _cfvst_load_v_pipeline(next_j)
+                    # The pipeline cohort has no sliding window, so masked=True
+                    # applies only the causal upper bound.
+                    m_new, l_new, o_acc = softmax_pv(s, j, m_i, l_i, o_acc, masked)
 
+                if VWQ:
+                    # K(j+1) DMA and V(j+1) loads landed; every wave finished its
+                    # PV(j) V reads -> next tile may read K(j+1) and overwrite V.
+                    b.s_waitcnt(vmcnt=0)
+                    b.sync_lds_only()
+                    b.scf_yield(m_new, l_new, *o_acc, *[x for pr in v_next for x in pr])
+                    return
                 # WAR: finish all waves' K/V LDS reads before a single K slot
                 # or the (always single-buffered) V slot can be overwritten.
                 # LDS-only sync leaves early K DMA / V VMEM loads in flight.
@@ -2499,10 +4556,43 @@ def _build_attention_dense_single_buffer(
             loop_res = loop.results
             m_i = loop_res[0]
             l_i = loop_res[1]
+            if spec.qkla_lhalf:
+                # per-half partial row sums -> full row sum (once per work item)
+                l_i = b.fadd(l_i, b.warp_shuffle_xor(l_i, 32))
             o_acc = list(loop_res[2 : 2 + D_TILES])
             last_kbuf = b.mod(last_j, b.const_i32(K_BUFS))
-            s = do_qk(last_kbuf)
+            if VWQ and not VDB:
+                pv_flat = loop_res[2 + D_TILES : 2 + D_TILES + 2 * V_ITEMS]
+                publish_prefetched_v(
+                    [(pv_flat[2 * i], pv_flat[2 * i + 1]) for i in range(V_ITEMS)]
+                )
+                b.sync_lds_only()
+            if QKLA and spec.qkla_chunked:
+                # S was carried already scaled.
+                sbase = 2 + D_TILES + (0 if VDB else 2 * V_ITEMS)
+                s = [
+                    [b.vec_extract(acc, i) for i in range(16)]
+                    for acc in loop_res[sbase : sbase + N_SUB]
+                ]
+                if spec.qkla_chunk_rev == 3:
+                    # rev 3: run the last tile's carried PV MFMAs before the epilogue
+                    pend = list(loop_res[sbase + N_SUB :])
+                    for i, dtc in enumerate(carried_dts()):
+                        o_acc[dtc] = mfma_32x32x8_for_dtype(
+                            b, dtype, pend[i], pend[-1], o_acc[dtc]
+                        )
+            elif QKLA:
+                s = [
+                    [b.fmul(b.vec_extract(acc, i), qk_scale) for i in range(16)]
+                    for acc in loop_res[2 + D_TILES + 2 * V_ITEMS :]
+                ]
+            else:
+                s = do_qk(last_kbuf)
+            if VDB:
+                V_SLOT["r"] = b.mod(last_j, b.const_i32(2))
+                V_SLOT["rb"] = None
             m_i, l_i, o_acc = softmax_pv(s, last_j, m_i, l_i, o_acc, True)
+            V_SLOT["r"] = V_SLOT["rb"] = None
             b.sync_lds_only()
 
         elif causal and not SW and DIAG_SPLIT:
@@ -2682,6 +4772,69 @@ def _build_attention_dense_single_buffer(
             # Both half-waves hold the same query row; one of them writes its LSE.
             with b.scf_if(b.cmp_eq(lane_h, b.const_i32(0))):
                 lse_store(b, lse, lse_index, m_i, l_i, row_has_mass=row_has_mass)
+        if spec.o_lds_stage:
+            # All waves past their last V/K reads and K DMAs, then O goes through
+            # the K buffer: per wave 32 rows x 64 dims per half, 8 B chunks XORed
+            # with row & 15; read back row-contiguous, 16 B per lane.
+            b.s_waitcnt(vmcnt=0)
+            b.sync_lds_only()
+            o_base_e = b.mul(wave, b.const_i32(2048))
+            # Opaque lane: the staging addresses are computed here, after the
+            # loops, instead of being CSE'd with pre-loop values and kept live.
+            lane_o = b.optimization_barrier(lane)
+            rr = _mfma_32x32_c_col(b, lane_o, 0)
+            lane_ho = b.div(lane_o, b.const_i32(32))
+            w_sw = b.land(rr, b.const_i32(15))
+            o_lrow = b.div(lane_o, b.const_i32(8))
+            o_lk = b.mod(lane_o, b.const_i32(8))
+            o_lk2 = b.mul(o_lk, b.const_i32(2))
+            for hf in range(2):
+                for dtl in range(2):
+                    dt = hf * 2 + dtl
+                    for g in range(4):
+                        vals = [
+                            b.cast_f32_to(
+                                b.fmul(b.vec_extract(o_acc[dt], g * 4 + kk), rcp_l),
+                                dtype,
+                            )
+                            for kk in range(4)
+                        ]
+                        ch = b.xor(b.add(b.const_i32(dtl * 8 + g * 2), lane_ho), w_sw)
+                        e = b.add(
+                            b.add(o_base_e, b.mul(rr, b.const_i32(64))),
+                            b.mul(ch, b.const_i32(4)),
+                        )
+                        b.smem_store_vN(
+                            K_lds,
+                            [b.const_i32(0), b.const_i32(0), e],
+                            b.vec_pack(vals, dtype),
+                            4,
+                        )
+                for i in range(4):
+                    row = b.add(b.const_i32(i * 8), o_lrow)
+                    r_sw = b.land(row, b.const_i32(15))
+                    halves = []
+                    for hh in range(2):
+                        ch = b.xor(b.add(o_lk2, b.const_i32(hh)), r_sw)
+                        e = b.add(
+                            b.add(o_base_e, b.mul(row, b.const_i32(64))),
+                            b.mul(ch, b.const_i32(4)),
+                        )
+                        halves.append(
+                            b.smem_load_vN(
+                                K_lds, b.const_i32(0), b.const_i32(0), e,
+                                dtype=dtype, n=4,
+                            )
+                        )
+                    v8 = b.vec_pack(
+                        [b.vec_extract(halves[t // 4], t % 4) for t in range(8)], dtype
+                    )
+                    addr = b.add(
+                        b.add(o_base, b.mul(b.add(q_tok0, row), _stride_q())),
+                        b.add(b.const_i32(hf * 64), b.mul(o_lk, b.const_i32(8))),
+                    )
+                    b.global_store_vN(o, addr, v8, 8, align=16)
+            return
         _emit_o_store(
             b,
             o,
@@ -2727,6 +4880,19 @@ def _build_attention_dense_single_buffer(
             fastdiv=make_fastdiv(b, rt),
         )
         cta_id = b.block_id_x()
+        if spec.wg_timing:
+            _rt = lambda: b.inline_asm(
+                "s_memrealtime $0\n\ts_waitcnt lgkmcnt(0)", "=s", (), I64,
+                result_name_hint="rt",
+            )
+            _ct = lambda: b.inline_asm(
+                "s_memtime $0\n\ts_waitcnt lgkmcnt(0)", "=s", (), I64,
+                result_name_hint="ct",
+            )
+            wgt_t0 = _rt()
+            wgt_c0 = _ct()
+            wgt_hw = b.inline_asm("s_getreg_b32 $0, hwreg(HW_REG_HW_ID)", "=s", (), I32)
+            wgt_xcc = b.inline_asm("s_getreg_b32 $0, hwreg(HW_REG_XCC_ID)", "=s", (), I32)
         outer = b.scf_for(cta_id, w_p, b.const_i32(NP), iv_name="wi")
         with outer as wi:
             # Cross-work-item LDS reuse guard. The previous item's epilogue touches
@@ -2737,13 +4903,39 @@ def _build_attention_dense_single_buffer(
             # barrier suffices because there is no pending lgkm to sink here.
             b.s_waitcnt(vmcnt=0)
             b.s_barrier_bare()
-            d = PERSIST_DECODES[spec.resolved_persist_decode].emit_decode(
-                work_shape, wi
+            if spec.xcdlb:
+                _run_work_item(*_xcdlb_decode(work_shape, wi))
+            else:
+                d = PERSIST_DECODES[spec.resolved_persist_decode].emit_decode(
+                    work_shape, wi
+                )
+                # The kv head from the decode where it is a digit, else hq // gqa
+                # through the gqa fastdiv pair: no runtime division in the loop.
+                hkv_v = d.hkv if d.hkv is not None else work_shape.div(d.hq, "gqa")
+                _run_work_item(d.qb, d.hq, d.bt, hkv=hkv_v)
+        if spec.wg_timing:
+            # After this wave's last O stores have drained; lane 0 of each wave
+            # writes its 8-word record at ts_ptr[(cta*8 + wave) * 8].
+            b.s_waitcnt(vmcnt=0)
+            wgt_t1 = _rt()
+            wgt_c1 = _ct()
+            c32 = b.const_i64(32)
+            lo = lambda t: b.trunc(t, I32)
+            hi = lambda t: b.trunc(b.lshr(t, c32), I32)
+            rec = b.vec_pack(
+                [lo(wgt_t0), hi(wgt_t0), lo(wgt_t1), hi(wgt_t1), wgt_hw, wgt_xcc,
+                 cta_id, wave],
+                I32,
             )
-            # The kv head from the decode where it is a digit, else hq // gqa through
-            # the gqa fastdiv pair: no runtime division in the grid-stride loop.
-            hkv_v = d.hkv if d.hkv is not None else work_shape.div(d.hq, "gqa")
-            _run_work_item(d.qb, d.hq, d.bt, hkv=hkv_v)
+            z = b.const_i32(0)
+            rec2 = b.vec_pack([lo(wgt_c0), hi(wgt_c0), lo(wgt_c1), hi(wgt_c1), z, z, z, z], I32)
+            entry = b.add(b.mul(cta_id, b.const_i32(8)), wave)
+            with b.scf_if(b.cmp_eq(lane, b.const_i32(0))):
+                b.global_store_vN(ts_p, b.mul(entry, b.const_i32(16)), rec, 8, align=16)
+                b.global_store_vN(
+                    ts_p, b.add(b.mul(entry, b.const_i32(16)), b.const_i32(8)), rec2, 8,
+                    align=16,
+                )
     elif KVS > 1:
         # The segment index is the fastest-varying part of grid x, so the decode
         # sees the unsplit grid unchanged.
@@ -2834,6 +5026,8 @@ def attention_dense_signature(spec: AttentionDenseSpec):
     if _as_gfx942_spec(spec).kv_segments > 1:
         for name in SEGMENT_PARAMS:
             sig = sig.ptr(name, "f32")
+    if _as_gfx942_spec(spec).wg_timing:
+        sig = sig.ptr("ts_ptr", "i32")
     return sig.build()
 
 
