@@ -649,6 +649,20 @@ class Gfx942AttentionDenseSpec(AttentionDenseSpec):
     # rescale (64 x v_mul) with the pack-ahead stages by fraction done, so the 16-cycle
     # exps don't cluster in B's second half.
     qkla_even_mix: bool = field(default=False, kw_only=True)
+    # Prototype gap fixes on top of qkla_even (all compare-only, default off):
+    # qkla_bperm_split: the row-max ds_bpermute starts its own chunk and alpha (its
+    #   consumer) the chunk after, so its latency hides behind MFMAs.
+    # qkla_start_ilv: tile start = first K reads, then row-max VALU, then MFMA #1.
+    # qkla_vmem_after_mfma: V(j+1) loads (chunk >= 1) and K(j+2) DMA rows are issued
+    #   right after an MFMA (their SALU/VALU first); DMA rows at PV slots 2r+2.
+    # qkla_vr0_early: pack-0 V reads after QK MFMA #31 instead of #32.
+    # qkla_vswz2: V^T swizzle key (dim & 15) ^ ((dim >> 4) & 1) at every V store/read
+    #   (BN64): the V(j+1) ds_write_b32 drops from 4-way to 2-way, reads stay 1-way.
+    qkla_bperm_split: bool = field(default=False, kw_only=True)
+    qkla_start_ilv: bool = field(default=False, kw_only=True)
+    qkla_vmem_after_mfma: bool = field(default=False, kw_only=True)
+    qkla_vr0_early: bool = field(default=False, kw_only=True)
+    qkla_vswz2: bool = field(default=False, kw_only=True)
     # wg_timing (prototype, measurement only, persistent grid): every wave writes
     #   16 i32 to a trailing ``ts_ptr`` at [cta*8 + wave]: s_memrealtime at start
     #   (lo, hi) and after its last item's stores drained (lo, hi), HW_ID, XCC_ID,
@@ -1001,6 +1015,11 @@ def _tuning_name_tags(spec: "Gfx942AttentionDenseSpec") -> str:
         parts.append(f"even{spec.qkla_even}")
     if spec.qkla_even_mix:
         parts.append("mix")
+    for _k, _t in (("qkla_bperm_split", "bps"), ("qkla_start_ilv", "sti"),
+                   ("qkla_vmem_after_mfma", "vam"), ("qkla_vr0_early", "vr0e"),
+                   ("qkla_vswz2", "vswz2")):
+        if getattr(spec, _k):
+            parts.append(_t)
     if spec.wg_timing:
         parts.append("wgt")
     return "".join(f"_{p}" for p in parts)
@@ -1650,6 +1669,11 @@ def supports_attention_dense(
         and spec.dtype == "bf16" and not spec.qkla_max_ahead
     ):
         return False, "qkla_even (prototype): bf16, qkla_chunked rev 1, qkla_vdb 2, no QK tail, 8..64"
+    if (spec.qkla_bperm_split or spec.qkla_start_ilv or spec.qkla_vmem_after_mfma
+            or spec.qkla_vr0_early) and not (spec.qkla_even and spec.qkla_lds_after_mfma):
+        return False, "qkla gap-fix knobs (prototype) need qkla_even + qkla_lds_after_mfma"
+    if spec.qkla_vswz2 and not (spec.block_n == 64 and spec.qkla_vdb and spec.resolved_use_v_swizzle()):
+        return False, "qkla_vswz2 (prototype) needs block_n 64, qkla_vdb and the V swizzle"
     if spec.qkla_even_mix and not spec.qkla_even:
         return False, "qkla_even_mix (prototype) needs qkla_even"
     if spec.qkla_lhalf and not (spec.qk_lookahead and spec.qkla_chunked):
@@ -2069,6 +2093,13 @@ def _build_attention_dense_single_buffer(
         # in-bounds here. 4 bits (15) saturate the 32-bank field at width 64, 31 at 128.
         SWZ_V = spec.resolved_use_v_swizzle()
         V_SWZ_MASK = V_LDROW // 4 - 1
+
+        def vswz_key(dim):
+            """V^T swizzle key: dim & V_SWZ_MASK (qkla_vswz2: ^ (dim >> 4) & 1)."""
+            m_ = b.land(dim, b.const_i32(V_SWZ_MASK))
+            if spec.qkla_vswz2:
+                m_ = b.xor(m_, b.land(b.lshr(dim, b.const_i32(4)), b.const_i32(1)))
+            return m_
     else:
         # V keeps the natural [token, dim] async-DMA layout (D64: VGPR-bound, cfvst
         # regresses it -- see _use_cfvst); read element-wise in read_v. No V^T buffer to
@@ -2193,10 +2224,10 @@ def _build_attention_dense_single_buffer(
                 # instead of nesting sub-expressions inside b.shl/b.xor argument lists: a
                 # C++ builder mirror may evaluate call arguments in a different order and
                 # renumber SSA, tripping a parity gate. Same order here = same IR.
-                m0 = b.land(d0, b.const_i32(V_SWZ_MASK))
+                m0 = vswz_key(d0)
                 s0 = b.shl(m0, b.const_i32(2))
                 c0 = b.xor(t0, s0)
-                m1 = b.land(d1, b.const_i32(V_SWZ_MASK))
+                m1 = vswz_key(d1)
                 s1 = b.shl(m1, b.const_i32(2))
                 c1 = b.xor(t0, s1)
             else:
@@ -2235,7 +2266,7 @@ def _build_attention_dense_single_buffer(
             # then (kk*8) by XOR (kk*8 and d_base use disjoint bits, so
             # (kk*8 + d) ^ M == (kk*8) ^ (d ^ M)); dt rows fold into immediates.
             if V_SLOT.get("rb") is None:
-                m = b.land(lane_m, b.const_i32(V_SWZ_MASK))
+                m = vswz_key(lane_m)
                 sw = b.shl(m, b.const_i32(2))
                 V_SLOT["rb"] = b.add(
                     b.add(
@@ -2254,7 +2285,7 @@ def _build_attention_dense_single_buffer(
             key0 = b.add(b.const_i32(kk * 8), d_base)
             col = key0
             if SWZ_V:
-                m = b.land(dim_row, b.const_i32(V_SWZ_MASK))
+                m = vswz_key(dim_row)
                 s = b.shl(m, b.const_i32(2))
                 col = b.xor(key0, s)
             return b.smem_load_vN(
@@ -3244,11 +3275,15 @@ def _build_attention_dense_single_buffer(
             C_VST_B = 16 if EVEN else C_VST
             C_VLD_B = 4 if EVEN else C_VLD
 
-            def lds_after_mfma():
+            def lds_after_mfma(vmem=False):
                 # this region: all VALU (addresses, perms), then the MFMA, then LDS
                 b.sched_group_barrier(0x002, 64, 0)
+                if vmem:
+                    b.sched_group_barrier(0x004, 32, 0)  # SALU (M0 / offsets) too
                 b.sched_group_barrier(0x008, 1, 0)
                 b.sched_group_barrier(0x080, 16, 0)
+                if vmem:
+                    b.sched_group_barrier(0x010, 8, 0)
             REV = spec.qkla_chunk_rev
             CARRY = REV == 3
             PLAN = REV in (2, 3, 4)  # fixed per-chunk PV plan
@@ -3323,8 +3358,14 @@ def _build_attention_dense_single_buffer(
                             # max keeps max3 fusion from pulling it into the next chunk.
                             yield 2 * (C_MX + (C_MSK if MSK else 0))
 
-                tile_max = (USE_MA_IN if USE_MA_IN is not None
-                            else b.fmax(mx, b.warp_shuffle_xor(mx, 32)))
+                if USE_MA_IN is None and spec.qkla_bperm_split:
+                    yield -1  # end chunk: the ds_bpermute starts the next one
+                    sh_ = b.warp_shuffle_xor(mx, 32)
+                    yield -1  # end chunk: alpha (its consumer) one chunk later
+                    tile_max = b.fmax(mx, sh_)
+                else:
+                    tile_max = (USE_MA_IN if USE_MA_IN is not None
+                                else b.fmax(mx, b.warp_shuffle_xor(mx, 32)))
                 m_new = b.fmax(m_i, tile_max)
                 alpha = exp2(b.fsub(m_i, m_new))
                 st.update(s=sv, m=m_new, alpha=alpha)
@@ -3478,8 +3519,11 @@ def _build_attention_dense_single_buffer(
                                 ws = [val[("w", pk, 0)], val[("w", pk, 1)]]
                                 packs[pk] = b.bitcast(b.vec_pack(ws, I32), VectorType(BF16, 4))
                         add_u(4, dl, [rid[2 * h2], rid[2 * h2 + 1]], f_word)
-                for r in range(N_KDMA):
-                    add_u(8, min(n_s - 1, 2 * r + 1), [], lambda: next(k_steps, None))
+                VAM_PV = spec.qkla_vmem_after_mfma
+                if not VAM_PV:
+                    for r in range(N_KDMA):
+                        add_u(8, min(n_s - 1, 2 * r + 1), [], lambda: next(k_steps, None))
+                dma_slots = {2 * r + 2 for r in range(N_KDMA)} if VAM_PV else set()
                 for e in range(N_SUB * 16):
                     def f_ssc(e=e):
                         n, i = divmod(e, 16)
@@ -3492,10 +3536,15 @@ def _build_attention_dense_single_buffer(
                     if packs[kk] is None:
                         raise AssertionError(f"qkla_even: pack {kk} late")
                     o[dt] = mfma_32x32x8_for_dtype(b, dtype, vr[kk][dt], packs[kk], o[dt])
+                    gb = False
                     if dt == 0 and kk + 1 < KK_STEPS:
                         vr[kk + 1] = [read_v(d, kk + 1) for d in range(D_TILES)]
-                        if LAM:
-                            lds_after_mfma()
+                        gb = LAM
+                    if si in dma_slots:
+                        next(k_steps, None)
+                        gb = True
+                    if gb:
+                        lds_after_mfma(vmem=VAM_PV)
                     fence()
                     # even spread: this chunk takes (remaining work) / (remaining chunks)
                     rem = sum(u["cost"] for u in U if u["slot"] is None)
@@ -3683,6 +3732,17 @@ def _build_attention_dense_single_buffer(
             if CARRY:
                 next(qk_next)  # rev 3: QK(j+1)'s first K reads, no MFMA yet
                 cdts = carried_dts()
+            if spec.qkla_start_ilv:
+                next(qk_next)  # the first K reads only (preyield)
+                fence()
+                while done < 32:  # independent row-max VALU ahead of MFMA #1
+                    c = next(hv, None)
+                    if c is None or c == -1:
+                        break
+                    done += c
+                    used += 1
+                fence()
+            VAM = spec.qkla_vmem_after_mfma
             for i in range(n_b):
                 if CARRY and i < QKLA_CARRY:
                     # rev 3: tile j-1's last PV MFMAs (registers only), before the
@@ -3691,19 +3751,24 @@ def _build_attention_dense_single_buffer(
                     o_acc[dtc] = mfma_32x32x8_for_dtype(b, dtype, pend[i], pend[-1], o_acc[dtc])
                 else:
                     next(qk_next)
+                VS0, VSS = spec.qkla_vld_start, spec.qkla_vld_stride
+                vld_here = LB_V and i >= VS0 and (i - VS0) % VSS == 0
                 if LAM and i >= 1:
                     # V(j+1) stores join the MFMA region (their perms/addresses go
                     # before the MFMA, the ds_writes right after it)
                     if VST_B and i >= n_b // 2 and next(vst_b, "end") != "end":
                         done += C_VST_B
-                    if i == n_b - 1:
+                    if i == n_b - (2 if spec.qkla_vr0_early else 1):
                         st["vr0"] = [read_v(dt, 0) for dt in range(D_TILES)]
-                    lds_after_mfma()
+                    if VAM and vld_here:
+                        vld_here = False
+                        if next(v_steps, "end") != "end":
+                            done += C_VLD_B
+                    lds_after_mfma(vmem=VAM)
                 fence()  # the MFMA stays at the head of its chunk
                 # V(j+1) loads: rev < 2 one per chunk from the tile start; rev 2
                 # spread evenly over B (they are only needed by the next tile)
-                VS0, VSS = spec.qkla_vld_start, spec.qkla_vld_stride
-                if LB_V and i >= VS0 and (i - VS0) % VSS == 0 and next(v_steps, "end") != "end":
+                if vld_here and next(v_steps, "end") != "end":
                     done += C_VLD_B
                 # qkla_vdb 2: V(j+1) -> slot (j+1)%2, one item per chunk in B's
                 # 2nd half (its loads were issued in the first chunks)
@@ -3718,7 +3783,7 @@ def _build_attention_dense_single_buffer(
                 ):
                     first = False
                     c = next(hv, None)
-                    if c is None:
+                    if c is None or c == -1:
                         break
                     done += c
                     used += 1
@@ -4145,7 +4210,7 @@ def _build_attention_dense_single_buffer(
                 bases = []
                 for r in range(2):
                     dr = d0 if r == 0 else b.add(d0, b.const_i32(1))
-                    sw = b.shl(b.land(dr, b.const_i32(V_SWZ_MASK)), b.const_i32(2))
+                    sw = b.shl(vswz_key(dr), b.const_i32(2))
                     bases.append(b.add(
                         b.add(slot_e, b.mul(dr, b.const_i32(V_LDROW))), b.xor(w2, sw)
                     ))
@@ -4421,7 +4486,7 @@ def _build_attention_dense_single_buffer(
                         m_new, l_new, o_acc, v_next, s_next = tile_chunked(
                             j, m_i, l_i, o_acc, s_acc,
                             iter(()) if VDB else publish_v_steps(v_cur),
-                            qk_raw_steps(next_kbuf, s_next, preyield=rev3), s_next, masked,
+                            qk_raw_steps(next_kbuf, s_next, preyield=rev3 or spec.qkla_start_ilv), s_next, masked,
                             lambda vals: _cfvst_load_v_pipeline_steps(next_j, vals),
                             lambda: load_pipeline_k_steps(kbuf, k2),
                             pend=pend_in if rev3 else None,
